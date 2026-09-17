@@ -235,6 +235,7 @@ interface SteamLibraryGame {
   img_capsule: string
   has_community_visible_stats: boolean
   installed: boolean
+  steamGridId?: number | null
   gridImageUrl?: string | null
   squareGridImageUrl?: string | null
   heroImageUrl?: string | null
@@ -843,7 +844,28 @@ function App(): React.JSX.Element {
     () => sortedSteamFriends.filter((friend) => friend.steamid !== selectedFriend?.steamid),
     [selectedFriend, sortedSteamFriends]
   )
-  const selectedGame = games.find((g) => g.id === selectedGameId) || null
+  const steamLibraryArtUrl = useCallback((appid: string): string => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900_2x.jpg`, [])
+  const steamHeroUrl = useCallback((appid: string): string => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_hero.jpg`, [])
+  const steamLogoUrl = useCallback((appid: string): string => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/logo.png`, [])
+
+  const rawSelectedGame = games.find((g) => g.id === selectedGameId) || null
+  const selectedGame = useMemo<Game | null>(() => {
+    if (!rawSelectedGame) return null
+    if (rawSelectedGame.isSteam || rawSelectedGame.steamAppId || rawSelectedGame.id.startsWith('steam-')) {
+      const appid = rawSelectedGame.steamAppId || rawSelectedGame.id.replace(/^steam-/, '')
+      const storedArtwork = getStoredSteamArtwork()[appid] || {}
+      return {
+        ...rawSelectedGame,
+        gridImageUrl: storedArtwork.gridImageUrl ?? rawSelectedGame.gridImageUrl ?? steamLibraryArtUrl(appid),
+        squareGridImageUrl: storedArtwork.squareGridImageUrl ?? rawSelectedGame.squareGridImageUrl ?? null,
+        heroImageUrl: storedArtwork.heroImageUrl ?? rawSelectedGame.heroImageUrl ?? steamHeroUrl(appid),
+        logoImageUrl: storedArtwork.logoImageUrl ?? rawSelectedGame.logoImageUrl ?? steamLogoUrl(appid),
+        iconDataUrl: storedArtwork.iconDataUrl ?? rawSelectedGame.iconDataUrl ?? null
+      }
+    }
+    return rawSelectedGame
+  }, [rawSelectedGame, steamLibraryArtUrl, steamHeroUrl, steamLogoUrl])
+
   const filteredSteamLibrary = useMemo(
     () => steamLibrary.filter((game) => !librarySearch || game.name.toLowerCase().includes(librarySearch.toLowerCase())),
     [steamLibrary, librarySearch]
@@ -856,13 +878,24 @@ function App(): React.JSX.Element {
     () => filteredSteamLibrary.find((game) => String(game.appid) === selectedSteamAppId) ?? filteredSteamLibrary[0] ?? null,
     [selectedSteamAppId, filteredSteamLibrary]
   )
-  const steamLibraryArtUrl = useCallback((appid: string): string => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_600x900_2x.jpg`, [])
-  const steamHeroUrl = useCallback((appid: string): string => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/library_hero.jpg`, [])
-  const steamLogoUrl = useCallback((appid: string): string => `https://cdn.cloudflare.steamstatic.com/steam/apps/${appid}/logo.png`, [])
   const librarySelectedGame = filteredLocalGames.find((g) => g.id === selectedGameId) || filteredLocalGames[0] || null
   const detailGame = useMemo<Game | null>(() => {
     const localGame = games.find((g) => g.id === detailGameId) || null
-    if (localGame) return localGame
+    if (localGame) {
+      if (localGame.isSteam || localGame.steamAppId || localGame.id.startsWith('steam-')) {
+        const appid = localGame.steamAppId || localGame.id.replace(/^steam-/, '')
+        const storedArtwork = getStoredSteamArtwork()[appid] || {}
+        return {
+          ...localGame,
+          gridImageUrl: storedArtwork.gridImageUrl ?? localGame.gridImageUrl ?? steamLibraryArtUrl(appid),
+          squareGridImageUrl: storedArtwork.squareGridImageUrl ?? localGame.squareGridImageUrl ?? null,
+          heroImageUrl: storedArtwork.heroImageUrl ?? localGame.heroImageUrl ?? steamHeroUrl(appid),
+          logoImageUrl: storedArtwork.logoImageUrl ?? localGame.logoImageUrl ?? steamLogoUrl(appid),
+          iconDataUrl: storedArtwork.iconDataUrl ?? localGame.iconDataUrl ?? null
+        }
+      }
+      return localGame
+    }
 
     if (!detailGameId || !detailGameId.startsWith('steam-')) return null
 
@@ -1370,11 +1403,11 @@ function App(): React.JSX.Element {
         return {
           ...game,
           installed: Boolean(installStatus?.[game.appid]) || Boolean(game.installed),
-          gridImageUrl: storedArtwork.gridImageUrl ?? inMemory?.gridImageUrl ?? game.gridImageUrl,
-          squareGridImageUrl: storedArtwork.squareGridImageUrl ?? inMemory?.squareGridImageUrl ?? game.squareGridImageUrl,
-          heroImageUrl: storedArtwork.heroImageUrl ?? inMemory?.heroImageUrl ?? game.heroImageUrl,
-          logoImageUrl: storedArtwork.logoImageUrl ?? inMemory?.logoImageUrl ?? game.logoImageUrl,
-          iconDataUrl: storedArtwork.iconDataUrl ?? inMemory?.iconDataUrl ?? game.iconDataUrl,
+          gridImageUrl: storedArtwork.gridImageUrl ?? inMemory?.gridImageUrl ?? game.gridImageUrl ?? steamLibraryArtUrl(game.appid),
+          squareGridImageUrl: storedArtwork.squareGridImageUrl ?? inMemory?.squareGridImageUrl ?? game.squareGridImageUrl ?? null,
+          heroImageUrl: storedArtwork.heroImageUrl ?? inMemory?.heroImageUrl ?? game.heroImageUrl ?? steamHeroUrl(game.appid),
+          logoImageUrl: storedArtwork.logoImageUrl ?? inMemory?.logoImageUrl ?? game.logoImageUrl ?? steamLogoUrl(game.appid),
+          iconDataUrl: storedArtwork.iconDataUrl ?? inMemory?.iconDataUrl ?? game.iconDataUrl ?? null,
         }
       })
 
@@ -1394,7 +1427,7 @@ function App(): React.JSX.Element {
     } finally {
       setSteamLibraryLoading(false)
     }
-  }, [librarySource, steamAccount])
+  }, [librarySource, steamAccount, steamLibraryArtUrl, steamHeroUrl, steamLogoUrl])
 
   // ── Refresh steam library when download completes ──
   const prevCompletedRef = useRef<string>('')
@@ -1947,23 +1980,28 @@ function App(): React.JSX.Element {
     let launchTarget: Game | null = null
 
     const resolveSteamTarget = (appid: string): Game | null => {
+      const existingInGames = games.find((g) => g.id === `steam-${appid}` || g.steamAppId === String(appid))
       const steamG = steamLibrary.find((g) => String(g.appid) === String(appid))
-      if (!steamG) return null
-      const installed = Boolean(steamG.installed)
+      if (!steamG && !existingInGames) return null
+      const installed = steamG ? Boolean(steamG.installed) : true
+      const storedArtwork = getStoredSteamArtwork()[String(appid)] || {}
+
       return {
-        id: `steam-${steamG.appid}`,
-        name: steamG.name,
-        exePath: installed ? `steam://rungameid/${steamG.appid}` : `steam://install/${steamG.appid}`,
-        playtimeMinutes: Math.round(steamG.playtime_forever / 60),
-        lastPlayed: null,
-        createdAt: new Date().toISOString(),
-        color: '#66b2ff',
-        steamAppId: String(steamG.appid),
+        id: `steam-${appid}`,
+        name: existingInGames?.name || steamG?.name || `Steam App ${appid}`,
+        exePath: installed ? `steam://rungameid/${appid}` : `steam://install/${appid}`,
+        playtimeMinutes: existingInGames?.playtimeMinutes ?? (steamG ? Math.round(steamG.playtime_forever / 60) : 0),
+        lastPlayed: existingInGames?.lastPlayed ?? null,
+        createdAt: existingInGames?.createdAt || new Date().toISOString(),
+        color: existingInGames?.color || '#66b2ff',
+        steamAppId: String(appid),
         isSteam: true,
-        iconDataUrl: steamG.iconDataUrl || null,
-        gridImageUrl: steamG.gridImageUrl || steamLibraryArtUrl(steamG.appid),
-        heroImageUrl: steamG.heroImageUrl || steamLibraryArtUrl(steamG.appid),
-        logoImageUrl: steamG.logoImageUrl || null
+        steamGridId: existingInGames?.steamGridId ?? steamG?.steamGridId ?? null,
+        iconDataUrl: storedArtwork.iconDataUrl ?? existingInGames?.iconDataUrl ?? steamG?.iconDataUrl ?? null,
+        gridImageUrl: storedArtwork.gridImageUrl ?? existingInGames?.gridImageUrl ?? steamG?.gridImageUrl ?? steamLibraryArtUrl(appid),
+        squareGridImageUrl: storedArtwork.squareGridImageUrl ?? existingInGames?.squareGridImageUrl ?? steamG?.squareGridImageUrl ?? null,
+        heroImageUrl: storedArtwork.heroImageUrl ?? existingInGames?.heroImageUrl ?? steamG?.heroImageUrl ?? steamLibraryArtUrl(appid),
+        logoImageUrl: storedArtwork.logoImageUrl ?? existingInGames?.logoImageUrl ?? steamG?.logoImageUrl ?? null
       } as Game
     }
 
@@ -2010,27 +2048,31 @@ function App(): React.JSX.Element {
       const appid = String(launchTarget.steamAppId || launchTarget.id.replace(/^steam-/, ''))
       const inst = steamLibrary.some((g) => String(g.appid) === appid && g.installed)
       const steamGame = steamLibrary.find((g) => String(g.appid) === appid)
+      const storedArtwork = getStoredSteamArtwork()[appid] || {}
       const now = new Date().toISOString()
       launchTarget = { ...launchTarget, exePath: inst ? `steam://rungameid/${appid}` : `steam://install/${appid}` }
       setGames((prev) => {
+        const existingGame = prev.find((g) => g.id === `steam-${appid}` || g.steamAppId === appid)
         const entry: Game = {
           id: `steam-${appid}`,
-          name: steamGame?.name || launchTarget!.name,
+          name: existingGame?.name || steamGame?.name || launchTarget!.name,
           exePath: launchTarget!.exePath,
-          iconDataUrl: steamGame?.iconDataUrl || launchTarget!.iconDataUrl || null,
-          playtimeMinutes: launchTarget!.playtimeMinutes,
+          iconDataUrl: storedArtwork.iconDataUrl ?? existingGame?.iconDataUrl ?? launchTarget!.iconDataUrl ?? steamGame?.iconDataUrl ?? null,
+          playtimeMinutes: existingGame?.playtimeMinutes ?? launchTarget!.playtimeMinutes,
           lastPlayed: now,
-          createdAt: now,
-          color: launchTarget!.color,
+          createdAt: existingGame?.createdAt || launchTarget!.createdAt || now,
+          color: existingGame?.color || launchTarget!.color,
           steamAppId: appid,
           isSteam: true,
-          gridImageUrl: launchTarget!.gridImageUrl || steamGame?.gridImageUrl || steamLibraryArtUrl(appid),
-          heroImageUrl: launchTarget!.heroImageUrl || steamGame?.heroImageUrl || steamLibraryArtUrl(appid),
-          logoImageUrl: launchTarget!.logoImageUrl || steamGame?.logoImageUrl || null
+          steamGridId: existingGame?.steamGridId ?? launchTarget!.steamGridId ?? null,
+          gridImageUrl: storedArtwork.gridImageUrl ?? existingGame?.gridImageUrl ?? launchTarget!.gridImageUrl ?? steamGame?.gridImageUrl ?? steamLibraryArtUrl(appid),
+          squareGridImageUrl: storedArtwork.squareGridImageUrl ?? existingGame?.squareGridImageUrl ?? launchTarget!.squareGridImageUrl ?? steamGame?.squareGridImageUrl ?? null,
+          heroImageUrl: storedArtwork.heroImageUrl ?? existingGame?.heroImageUrl ?? launchTarget!.heroImageUrl ?? steamGame?.heroImageUrl ?? steamLibraryArtUrl(appid),
+          logoImageUrl: storedArtwork.logoImageUrl ?? existingGame?.logoImageUrl ?? launchTarget!.logoImageUrl ?? steamGame?.logoImageUrl ?? null
         }
 
         const updated = prev.some((g) => g.id === entry.id)
-          ? prev.map((g) => g.id === entry.id ? { ...g, ...entry, lastPlayed: now } : g)
+          ? prev.map((g) => g.id === entry.id ? { ...g, ...entry } : g)
           : [...prev, entry]
 
         window.api.saveGames(updated)
@@ -3507,12 +3549,19 @@ function App(): React.JSX.Element {
               id={`game-card-${game.id}`}
             >
               {runningGameId === game.id && <div className="running-badge" />}
-              {game.squareGridImageUrl ? (
+              {game.squareGridImageUrl || game.gridImageUrl ? (
                 <img
-                  src={game.squareGridImageUrl}
+                  src={game.squareGridImageUrl || game.gridImageUrl!}
                   alt={game.name}
                   className="game-card-cover"
                   draggable={false}
+                  onError={(e) => {
+                    const target = e.currentTarget
+                    if (game.steamAppId && !target.dataset.fallback) {
+                      target.dataset.fallback = 'true'
+                      target.src = steamLibraryArtUrl(game.steamAppId)
+                    }
+                  }}
                 />
               ) : game.iconDataUrl ? (
                 <img
@@ -5006,7 +5055,7 @@ function App(): React.JSX.Element {
                         >
                           <div className="library-item-art steam-library-art">
                             <img
-                              src={game.squareGridImageUrl || steamLibraryArtUrl(game.appid)}
+                              src={game.squareGridImageUrl || game.gridImageUrl || steamLibraryArtUrl(game.appid)}
                               alt={game.name}
                               className={`library-item-cover ${game.installed ? 'installed' : 'not-installed'}`}
                               draggable={false}
@@ -5066,8 +5115,8 @@ function App(): React.JSX.Element {
                         onDoubleClick={() => { detailFromLibraryRef.current = true; setLibraryView(false); openDetailView(game.id) }}
                       >
                         <div className="library-item-art">
-                          {game.squareGridImageUrl ? (
-                            <img src={game.squareGridImageUrl} alt={game.name} className="library-item-cover" draggable={false} />
+                          {game.squareGridImageUrl || game.gridImageUrl ? (
+                            <img src={game.squareGridImageUrl || game.gridImageUrl!} alt={game.name} className="library-item-cover" draggable={false} />
                           ) : game.iconDataUrl ? (
                             <img src={game.iconDataUrl} alt={game.name} className="library-item-icon" draggable={false} />
                           ) : (
