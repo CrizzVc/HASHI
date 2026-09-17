@@ -46,6 +46,7 @@ let isGameRunning = false
 // ── Omniconsole — prevent launcher from hiding when a game launches ──
 let omniconsoleEnabled = false
 
+/* Extensiones deshabilitadas
 interface LauncherExtension {
   id: string
   name: string
@@ -58,8 +59,7 @@ interface LauncherExtension {
   enabled: boolean
 }
 
-// Las extensiones son declarativas: no se carga código de terceros dentro del
-// proceso del launcher. Cada manifiesto vive en userData/extensions/<id>.
+/* Extensiones deshabilitadas
 function getExtensionsDirectory(): string {
   return join(app.getPath('userData'), 'extensions')
 }
@@ -136,15 +136,11 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
     console.warn('[Extensions] No se pudo leer el directorio:', error)
     return []
   }
-}
-
 function readExtensions(): LauncherExtension[] {
-  const state = readExtensionsState()
-  const extensions = new Map<string, LauncherExtension>()
-  for (const extension of readExtensionsFrom(getBundledExtensionsDirectory())) extensions.set(extension.id, extension)
-  for (const extension of readExtensionsFrom(getExtensionsDirectory())) extensions.set(extension.id, extension)
-  return [...extensions.values()].map((extension) => ({ ...extension, enabled: state[extension.id] ?? true }))
+  // Extensiones deshabilitadas
+  return []
 }
+*/
 
 /**
  * Oculta el launcher mientras se juega.
@@ -1453,29 +1449,12 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('get-extensions', () => readExtensions())
-  ipcMain.handle('set-extension-enabled', (_event, id: string, enabled: boolean) => {
-    if (typeof id !== 'string' || typeof enabled !== 'boolean' || !readExtensions().some((extension) => extension.id === id)) {
-      return { success: false, error: 'Extensión no válida' }
-    }
-    try {
-      const state = readExtensionsState()
-      state[id] = enabled
-      fs.writeFileSync(getExtensionsStatePath(), JSON.stringify(state, null, 2), 'utf8')
-      return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
+  ipcMain.handle('get-extensions', () => [])
+  ipcMain.handle('set-extension-enabled', () => {
+    return { success: false, error: 'Extensiones deshabilitadas' }
   })
   ipcMain.handle('open-extensions-directory', async () => {
-    try {
-      const extensionsDir = getExtensionsDirectory()
-      fs.mkdirSync(extensionsDir, { recursive: true })
-      const error = await shell.openPath(extensionsDir)
-      return error ? { success: false, error } : { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
+    return { success: false, error: 'Extensiones deshabilitadas' }
   })
 
   // ── Startup shortcut handlers ──

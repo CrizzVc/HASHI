@@ -4,7 +4,7 @@ import cors from 'cors';
 import storeRoutes from './routes/store.js';
 import steamgridRoutes from './routes/steamgrid.js';
 import steamRoutes from './routes/steam.js';
-import animeav1Routes from './routes/animeav1.js';
+// Extensiones deshabilitadas: import animeav1Routes from './routes/animeav1.js';
 import tmdbRoutes from './routes/tmdb.js';
 import fanartRoutes from './routes/fanart.js';
 
@@ -16,7 +16,7 @@ app.use(express.json());
 app.use('/api/store', storeRoutes);
 app.use('/api/steamgrid', steamgridRoutes);
 app.use('/api/steam', steamRoutes);
-app.use('/api/animeav1', animeav1Routes);
+// Extensiones deshabilitadas: app.use('/api/animeav1', animeav1Routes);
 app.use('/api/tmdb', tmdbRoutes);
 app.use('/api/fanart', fanartRoutes);
 

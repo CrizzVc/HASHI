@@ -22,3 +22,7 @@
 ## SETTINGS
 <img width="1918" height="666" alt="image" src="https://github.com/user-attachments/assets/66ea892e-358b-4fae-af39-aa300a243ac8" />
 
+
+
+<!-- backend: npm start -->
+<!-- Frontend: npm start dev-->

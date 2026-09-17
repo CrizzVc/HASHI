@@ -23,7 +23,7 @@ type ActionId = (typeof ACTIONS)[number];
 const MediaDetailView: React.FC<MediaDetailViewProps> = ({ item, onClose }) => {
   const [backdrop, setBackdrop] = React.useState<string | null>(null);
   const [logo, setLogo] = React.useState<string | null | undefined>(undefined); // undefined = cargando, null = sin logo
-  const [episodes, setEpisodes] = React.useState<Array<{ episode: string; episodeUrl: string; image?: string | null }>>([]);
+  const [episodes] = React.useState<Array<{ episode: string; episodeUrl: string; image?: string | null }>>([]);
   const [showEpisodes, setShowEpisodes] = React.useState(false);
   const [focusZone, setFocusZone] = React.useState<FocusZone>('actions');
   const [focusedActionIndex, setFocusedActionIndex] = React.useState(0);
@@ -46,12 +46,7 @@ const MediaDetailView: React.FC<MediaDetailViewProps> = ({ item, onClose }) => {
       .then((response) => response.ok ? response.json() : null)
       .then((data: { logo?: string | null } | null) => setLogo(data?.logo ?? null))
       .catch(() => setLogo(null));
-    if (item.animeUrl) {
-      void fetch(`http://localhost:3000/api/animeav1/episodes?url=${encodeURIComponent(item.animeUrl)}`, { signal: controller.signal })
-        .then((response) => response.ok ? response.json() : null)
-        .then((data: { data?: Array<{ episode: string; episodeUrl: string; image?: string | null }> } | null) => setEpisodes(data?.data || []))
-        .catch(() => undefined);
-    }
+    // Extensiones deshabilitadas: no se realizan peticiones a /api/animeav1
     return () => controller.abort();
   }, [item.animeUrl, item.title]);
 
@@ -63,16 +58,7 @@ const MediaDetailView: React.FC<MediaDetailViewProps> = ({ item, onClose }) => {
     setPendingEpisode(episode);
     setFocusedServerIndex(0);
     setServers([]);
-    setIsLoadingServers(true);
-    try {
-      const response = await fetch(`http://localhost:3000/api/animeav1/servers?url=${encodeURIComponent(episode.episodeUrl)}`);
-      const data = await response.json() as { data?: Array<{ name: string; url: string }> };
-      setServers(data.data || []);
-    } catch (error) {
-      console.error('No se pudieron cargar los servidores:', error);
-    } finally {
-      setIsLoadingServers(false);
-    }
+    setIsLoadingServers(false);
   }, []);
 
   const startPlayer = React.useCallback((server?: { url: string }): void => {

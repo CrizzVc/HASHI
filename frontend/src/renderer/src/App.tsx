@@ -18,7 +18,6 @@ import {
   PaletteIcon,
   HomeIcon,
   DownloadIcon,
-  ExtensionIcon,
   HelpIcon,
   GlobeIcon
 } from './components/Icons'
@@ -208,15 +207,6 @@ const DEFAULT_FEATURED_GAMES: FeaturedLibraryGame[] = [
     coverUrl: 'https://cdn2.steamgriddb.com/thumb/055c25fa28c4eb8c6bb0672e557eef80.jpg'
   }
 ]
-
-const heroItem = {
-  title: 'Ecos del Vacío',
-  rating: '16+',
-  genre: 'Ciencia ficción',
-  year: '2024',
-  description: 'Una tripulación despierta de un sueño criogénico para descubrir que la nave lleva décadas a la deriva.',
-  backdrop: '/img/ecos-del-vacio-backdrop.jpg',
-};
 
 const continueWatching: MultimediaCard[] = [
   { id: 1, title: 'Ciudad de Cristal', season: '1', episode: '4', progress: 62 },
@@ -496,7 +486,6 @@ function App(): React.JSX.Element {
   const [animeAV1Latest, setAnimeAV1Latest] = useState<MultimediaCard[]>([])
   const [mediaDetail, setMediaDetail] = useState<MediaItem | null>(null)
   const [extensions, setExtensions] = useState<LauncherExtension[]>([])
-  const [extensionsLoading, setExtensionsLoading] = useState(false)
   const [showDownloadsModal, setShowDownloadsModal] = useState(false)
   const [libraryView, setLibraryView] = useState(false)
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
@@ -562,21 +551,13 @@ function App(): React.JSX.Element {
   const t = translations[language] || translations.es
 
   const loadExtensions = useCallback(async (): Promise<void> => {
-    setExtensionsLoading(true)
     try {
       setExtensions(await window.api.getExtensions())
     } catch (error) {
       console.error('No se pudieron cargar las extensiones:', error)
       setExtensions([])
-    } finally {
-      setExtensionsLoading(false)
     }
   }, [])
-
-  const openExtensions = useCallback((): void => {
-    setModal('extensions')
-    void loadExtensions()
-  }, [loadExtensions])
 
   const openExtension = useCallback((extension: LauncherExtension): void => {
     if (extension.type === 'native' && extension.nativeView) {
@@ -587,14 +568,6 @@ function App(): React.JSX.Element {
     }
     if (extension.entryUrl) void window.api.openExternal(extension.entryUrl)
   }, [extensions])
-
-  const toggleExtension = useCallback(async (extension: LauncherExtension): Promise<void> => {
-    const result = await window.api.setExtensionEnabled(extension.id, !extension.enabled)
-    if (result.success) {
-      setExtensions((current) => current.map((item) => item.id === extension.id ? { ...item, enabled: !item.enabled } : item))
-      if (extension.enabled && nativeView === extension.nativeView) setNativeView(null)
-    }
-  }, [nativeView])
 
   useEffect(() => {
     void loadExtensions()
@@ -742,12 +715,11 @@ function App(): React.JSX.Element {
   // Evita que el resto de vistas (fondo, hero del launcher, etc.) se muevan
   // mientras la vista multimedia está abierta encima
   useEffect(() => {
-    if (nativeView) {
-      const previousOverflow = document.body.style.overflow
-      document.body.style.overflow = 'hidden'
-      return () => {
-        document.body.style.overflow = previousOverflow
-      }
+    if (!nativeView) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
     }
   }, [nativeView])
 
@@ -2814,7 +2786,7 @@ function App(): React.JSX.Element {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
           setSidebarIndex((prev) => {
-            const next = Math.min(prev + 1, 7 + sidebarExtensions.length)
+            const next = Math.min(prev + 1, 6)
             if (next !== prev) playMove()
             return next
           })
@@ -2833,12 +2805,8 @@ function App(): React.JSX.Element {
           else if (sidebarIndex === 2) handleOpenStore(defaultStore)
           else if (sidebarIndex === 3) handleOpenSpecs()
           else if (sidebarIndex === 4) setShowDownloadsModal(true)
-          else if (sidebarIndex === 5) openExtensions()
-          else if (sidebarIndex >= 6 && sidebarIndex < 6 + sidebarExtensions.length) {
-            const extension = sidebarExtensions[sidebarIndex - 6]
-            if (extension) openExtension(extension)
-          } else if (sidebarIndex === 6 + sidebarExtensions.length) setModal('settings')
-          else if (sidebarIndex === 7 + sidebarExtensions.length) window.api.quitApp()
+          else if (sidebarIndex === 5) setModal('settings')
+          else if (sidebarIndex === 6) window.api.quitApp()
           setSidebarOpen(false)
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Escape') {
           e.preventDefault()
@@ -3028,7 +2996,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtensions, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
@@ -3321,7 +3289,7 @@ function App(): React.JSX.Element {
         onClick={() => setSidebarOpen(false)}
       />
       <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <section className={`sidebar-bottom ${sidebarOpen ? 'open' : ''}`}>
+        {/* <section className={`sidebar-bottom ${sidebarOpen ? 'open' : ''}`}>
           <button className={`sidebar-item ${sidebarIndex === 9 ? 'focused' : ''}`}
             onClick={() => { setNativeView(null); setSidebarOpen(false); }}
             style={{
@@ -3338,7 +3306,7 @@ function App(): React.JSX.Element {
             }}>
             <div className="sidebar-item-icon"><PlusIcon size={18} /></div>
           </button>
-        </section>
+        </section> */}
 
         <div className="sidebar-title" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <img src={hashiLogo} alt="Hashi" className="app-icon" style={{ width: '64px', height: '64px' }} />
@@ -3361,23 +3329,11 @@ function App(): React.JSX.Element {
         <button className={`sidebar-item ${sidebarIndex === 4 ? 'focused' : ''}`} onClick={() => { setShowDownloadsModal(true); setSidebarOpen(false); }}>
           <div className="sidebar-item-icon"><DownloadIcon size={18} /></div> {t.downloads}
         </button>
-        <button className={`sidebar-item ${sidebarIndex === 5 ? 'focused' : ''}`} onClick={() => { openExtensions(); setSidebarOpen(false); }}>
-          <div className="sidebar-item-icon"><ExtensionIcon size={18} /></div> {t.extensions}
-        </button>
-        {sidebarExtensions.map((extension, index) => (
-          <button
-            className={`sidebar-item ${sidebarIndex === 6 + index ? 'focused' : ''}`}
-            key={extension.id}
-            onClick={() => { openExtension(extension); setSidebarOpen(false) }}
-          >
-            <div className="sidebar-item-icon"><GlobeIcon size={18} /></div> {extension.name}
-          </button>
-        ))}
-        <button className={`sidebar-item ${sidebarIndex === 6 + sidebarExtensions.length ? 'focused' : ''}`} onClick={() => { setModal('settings'); setSidebarOpen(false); }}>
+        <button className={`sidebar-item ${sidebarIndex === 5 ? 'focused' : ''}`} onClick={() => { setModal('settings'); setSidebarOpen(false); }}>
           <div className="sidebar-item-icon"><SettingsIcon size={18} /></div> {t.settings}
         </button>
         <div style={{ marginTop: 'auto' }}>
-          <button className={`sidebar-item ${sidebarIndex === 7 + sidebarExtensions.length ? 'focused' : ''}`} onClick={() => window.api.quitApp()}>
+          <button className={`sidebar-item ${sidebarIndex === 6 ? 'focused' : ''}`} onClick={() => window.api.quitApp()}>
             <div className="sidebar-item-icon"><PowerIcon size={18} /></div> {t.exit}
           </button>
         </div>
@@ -5149,72 +5105,7 @@ function App(): React.JSX.Element {
         </section>
       )}
 
-      {/* ── Extensions Modal ── */}
-      {modal === 'extensions' && (
-        <div className="modal-overlay extensions-modal-overlay" onClick={() => setModal(null)}>
-          <section className="extensions-modal" onClick={(event) => event.stopPropagation()} aria-label="Extensiones">
-            <header className="extensions-header">
-              <div>
-                <p className="extensions-eyebrow">HASHI</p>
-                <h2>Extensiones</h2>
-                <p>Amplía tu launcher sin conceder acceso al sistema.</p>
-              </div>
-              <button className="extensions-close" type="button" onClick={() => setModal(null)} aria-label="Cerrar">×</button>
-            </header>
 
-            <div className="extensions-toolbar">
-              <button type="button" className="extensions-secondary-button" onClick={() => void loadExtensions()} disabled={extensionsLoading}>
-                {extensionsLoading ? 'Actualizando…' : 'Actualizar'}
-              </button>
-              <button
-                type="button"
-                className="extensions-primary-button"
-                onClick={() => void window.api.openExtensionsDirectory()}
-              >
-                Abrir carpeta de extensiones
-              </button>
-            </div>
-
-            <div className="extensions-list">
-              {extensionsLoading ? (
-                <p className="extensions-empty">Buscando extensiones…</p>
-              ) : extensions.length === 0 ? (
-                <div className="extensions-empty">
-                  <strong>Aún no hay extensiones instaladas.</strong>
-                  <span>Abre la carpeta y añade una extensión con su archivo <code>manifest.json</code>.</span>
-                </div>
-              ) : extensions.map((extension) => (
-                <article className="extension-card" key={extension.id}>
-                  <div className="extension-card-icon"><ExtensionIcon size={22} /></div>
-                  <div className="extension-card-content">
-                    <div className="extension-card-title-row">
-                      <h3>{extension.name}</h3>
-                      <span>v{extension.version}</span>
-                    </div>
-                    <p>{extension.description || 'Sin descripción.'}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="extensions-secondary-button"
-                    onClick={() => openExtension(extension)}
-                    disabled={!extension.enabled}
-                  >
-                    {extension.id === 'animeav1' ? 'Usar en Multimedia' : extension.type === 'native' ? 'Abrir vista' : 'Abrir'}
-                  </button>
-                  <button
-                    type="button"
-                    className={`extensions-toggle ${extension.enabled ? 'enabled' : ''}`}
-                    onClick={() => void toggleExtension(extension)}
-                    aria-pressed={extension.enabled}
-                  >
-                    {extension.enabled ? 'Activa' : 'Inactiva'}
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
-      )}
 
       {/* ── Settings Modal ── */}
       {modal === 'settings' && (
