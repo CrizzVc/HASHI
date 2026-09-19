@@ -25,4 +25,4 @@
 
 
 <!-- backend: npm start -->
-<!-- Frontend: npm start dev-->
+<!-- Frontend: npm run dev-->

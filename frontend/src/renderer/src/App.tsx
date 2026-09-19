@@ -18,6 +18,7 @@ import {
   PaletteIcon,
   HomeIcon,
   DownloadIcon,
+  ExtensionIcon,
   HelpIcon,
   GlobeIcon
 } from './components/Icons'
@@ -2847,8 +2848,9 @@ function App(): React.JSX.Element {
           else if (sidebarIndex === 2) handleOpenStore(defaultStore)
           else if (sidebarIndex === 3) handleOpenSpecs()
           else if (sidebarIndex === 4) setShowDownloadsModal(true)
-          else if (sidebarIndex === 5) setModal('settings')
-          else if (sidebarIndex === 6) window.api.quitApp()
+          else if (sidebarIndex === 5) setModal('extensions')
+          else if (sidebarIndex === 6) setModal('settings')
+          else if (sidebarIndex === 7) window.api.quitApp()
           setSidebarOpen(false)
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Escape') {
           e.preventDefault()
@@ -3371,11 +3373,14 @@ function App(): React.JSX.Element {
         <button className={`sidebar-item ${sidebarIndex === 4 ? 'focused' : ''}`} onClick={() => { setShowDownloadsModal(true); setSidebarOpen(false); }}>
           <div className="sidebar-item-icon"><DownloadIcon size={18} /></div> {t.downloads}
         </button>
-        <button className={`sidebar-item ${sidebarIndex === 5 ? 'focused' : ''}`} onClick={() => { setModal('settings'); setSidebarOpen(false); }}>
+        <button className={`sidebar-item ${sidebarIndex === 5 ? 'focused' : ''}`} onClick={() => { setModal('extensions'); setSidebarOpen(false); }}>
+          <div className="sidebar-item-icon"><ExtensionIcon size={18} /></div> {t.extensions}
+        </button>
+        <button className={`sidebar-item ${sidebarIndex === 6 ? 'focused' : ''}`} onClick={() => { setModal('settings'); setSidebarOpen(false); }}>
           <div className="sidebar-item-icon"><SettingsIcon size={18} /></div> {t.settings}
         </button>
         <div style={{ marginTop: 'auto' }}>
-          <button className={`sidebar-item ${sidebarIndex === 6 ? 'focused' : ''}`} onClick={() => window.api.quitApp()}>
+          <button className={`sidebar-item ${sidebarIndex === 7 ? 'focused' : ''}`} onClick={() => window.api.quitApp()}>
             <div className="sidebar-item-icon"><PowerIcon size={18} /></div> {t.exit}
           </button>
         </div>
@@ -5706,6 +5711,73 @@ function App(): React.JSX.Element {
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Extensions Modal ── */}
+      {modal === 'extensions' && (
+        <div className="modal-overlay extensions-modal-overlay" onClick={() => setModal(null)}>
+          <div className="extensions-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="extensions-header">
+              <div>
+                <p className="extensions-eyebrow">HASHI</p>
+                <h2>{t.extensions}</h2>
+                <p>Gestiona las extensiones instaladas en tu launcher.</p>
+              </div>
+              <button className="extensions-close" onClick={() => setModal(null)}>
+                <CloseIcon size={20} />
+              </button>
+            </div>
+            <div className="extensions-toolbar">
+              <button
+                className="extensions-secondary-button"
+                onClick={() => void window.api.openExtensionsDirectory()}
+              >
+                Abrir carpeta
+              </button>
+              <button
+                className="extensions-secondary-button"
+                onClick={() => void loadExtensions()}
+              >
+                Recargar
+              </button>
+            </div>
+            <div className="extensions-list">
+              {extensions.length === 0 ? (
+                <div className="extensions-empty">
+                  <strong>No hay extensiones instaladas</strong>
+                  <p>
+                    Coloca las carpetas de extensiones en<br />
+                    <code>%APPDATA%/hashi/extensions</code>
+                  </p>
+                </div>
+              ) : (
+                extensions.map((ext) => (
+                  <div key={ext.id} className="extension-card">
+                    <div className="extension-card-icon">
+                      <ExtensionIcon size={20} />
+                    </div>
+                    <div className="extension-card-content">
+                      <div className="extension-card-title-row">
+                        <h3>{ext.name}</h3>
+                        <span>v{ext.version}</span>
+                      </div>
+                      <p>{ext.description || 'Sin descripción'}</p>
+                    </div>
+                    <button
+                      className={`extensions-toggle ${ext.enabled ? 'enabled' : ''}`}
+                      onClick={async () => {
+                        await window.api.setExtensionEnabled(ext.id, !ext.enabled)
+                        await loadExtensions()
+                      }}
+                    >
+                      {ext.enabled ? 'Activa' : 'Inactiva'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

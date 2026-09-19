@@ -59,7 +59,6 @@ interface LauncherExtension {
   enabled: boolean
 }
 
-/* Extensiones deshabilitadas
 function getExtensionsDirectory(): string {
   return join(app.getPath('userData'), 'extensions')
 }
@@ -136,11 +135,22 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
     console.warn('[Extensions] No se pudo leer el directorio:', error)
     return []
   }
-function readExtensions(): LauncherExtension[] {
-  // Extensiones deshabilitadas
-  return []
 }
-*/
+
+function readExtensions(): LauncherExtension[] {
+  const state = readExtensionsState()
+  const bundled = readExtensionsFrom(getBundledExtensionsDirectory())
+  const user = readExtensionsFrom(getExtensionsDirectory())
+
+  const merged = new Map<string, LauncherExtension>()
+  for (const ext of bundled) merged.set(ext.id, ext)
+  for (const ext of user) merged.set(ext.id, ext)
+
+  return Array.from(merged.values()).map((ext) => ({
+    ...ext,
+    enabled: state[ext.id] !== undefined ? state[ext.id] : ext.enabled
+  }))
+}
 
 /**
  * Oculta el launcher mientras se juega.
@@ -1449,12 +1459,28 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('get-extensions', () => [])
-  ipcMain.handle('set-extension-enabled', () => {
-    return { success: false, error: 'Extensiones deshabilitadas' }
+  ipcMain.handle('get-extensions', () => {
+    return readExtensions()
+  })
+  ipcMain.handle('set-extension-enabled', (_, id: string, enabled: boolean) => {
+    try {
+      const state = readExtensionsState()
+      state[id] = enabled
+      fs.writeFileSync(getExtensionsStatePath(), JSON.stringify(state, null, 2), 'utf8')
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   })
   ipcMain.handle('open-extensions-directory', async () => {
-    return { success: false, error: 'Extensiones deshabilitadas' }
+    try {
+      const dir = getExtensionsDirectory()
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+      await shell.openPath(dir)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   })
 
   // ── Startup shortcut handlers ──
