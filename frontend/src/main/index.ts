@@ -46,7 +46,6 @@ let isGameRunning = false
 // ── Omniconsole — prevent launcher from hiding when a game launches ──
 let omniconsoleEnabled = false
 
-/* Extensiones deshabilitadas
 interface LauncherExtension {
   id: string
   name: string
