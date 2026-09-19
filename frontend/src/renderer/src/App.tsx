@@ -796,6 +796,7 @@ function App(): React.JSX.Element {
   const [detailScreenshots, setDetailScreenshots] = useState<Array<{ path_full: string; path_thumbnail: string }>>([])
   const [detailLoadingShots, setDetailLoadingShots] = useState(false)
   const [detailShotIndex, setDetailShotIndex] = useState(0)
+  const [detailFocusIndex, setDetailFocusIndex] = useState(0)
   const [detailInfo, setDetailInfo] = useState<{
     description: string | null
     developer: string | null
@@ -2980,7 +2981,7 @@ function App(): React.JSX.Element {
           setHomeCardMode('main')
         }
       } else {
-        // Si el detail está abierto, solo procesar Escape para cerrarlo
+        // Si el detail está abierto, navegar con flechas
         if (detailGameId) {
           if (e.key === 'Escape') {
             e.preventDefault()
@@ -2992,7 +2993,82 @@ function App(): React.JSX.Element {
             } else {
               setDetailGameId(null)
             }
+            return
           }
+
+          const hasShots = detailScreenshots.length > 1
+          const playIdx = hasShots ? 4 : 2
+          const editIdx = hasShots ? 5 : 3
+          // Focus indices: 0=Back, 1=Close, 2=ShotPrev?, 3=ShotNext?, playIdx=Play, editIdx=Edit
+
+          let next = detailFocusIndex
+
+          if (e.key === 'ArrowRight') {
+            e.preventDefault()
+            playMove()
+            if (detailFocusIndex === 0) next = 1          // Back → Close
+            else if (hasShots && detailFocusIndex === 2) next = 3  // ShotPrev → ShotNext
+            else if (detailFocusIndex === playIdx) next = editIdx   // Play → Edit
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault()
+            playMove()
+            if (detailFocusIndex === 1) next = 0          // Close → Back
+            else if (hasShots && detailFocusIndex === 3) next = 2  // ShotNext → ShotPrev
+            else if (detailFocusIndex === editIdx) next = playIdx   // Edit → Play
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            playMove()
+            if (detailFocusIndex === 0 || detailFocusIndex === 1) {
+              // Back/Close → ShotPrev or Play
+              next = hasShots ? 2 : playIdx
+            } else if (hasShots && detailFocusIndex === 2) {
+              // ShotPrev → Play
+              next = playIdx
+            } else if (hasShots && detailFocusIndex === 3) {
+              // ShotNext → Play
+              next = playIdx
+            }
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            playMove()
+            if (hasShots && detailFocusIndex === 2) {
+              // ShotPrev → Back
+              next = 0
+            } else if (hasShots && detailFocusIndex === 3) {
+              // ShotNext → Close
+              next = 1
+            } else if (detailFocusIndex === playIdx) {
+              // Play → ShotPrev or Back
+              next = hasShots ? 2 : 0
+            } else if (detailFocusIndex === editIdx) {
+              // Edit → ShotNext or Close
+              next = hasShots ? 3 : 1
+            }
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            playEnter()
+            if (detailFocusIndex === 0 || detailFocusIndex === 1) {
+              // Back / Close
+              if (detailFromLibraryRef.current) {
+                detailFromLibraryRef.current = false
+                setDetailGameId(null)
+                setLibraryView(true)
+              } else {
+                setDetailGameId(null)
+              }
+            } else if (hasShots && detailFocusIndex === 2) {
+              handlePrevShot()
+            } else if (hasShots && detailFocusIndex === 3) {
+              handleNextShot()
+            } else if (detailFocusIndex === playIdx) {
+              if (detailGame) handleLaunchGame(detailGame.id)
+            } else if (detailFocusIndex === editIdx) {
+              if (detailGame?.id) openEditGameModal(detailGame.id)
+            }
+            return
+          }
+
+          if (next !== detailFocusIndex) setDetailFocusIndex(next)
           return
         }
 
@@ -3056,6 +3132,7 @@ function App(): React.JSX.Element {
 
   const openDetailView = useCallback((gameId: string) => {
     playEnter()
+    setDetailFocusIndex(0)
     if (gameId.startsWith('steam-')) {
       const appid = gameId.replace(/^steam-/, '')
       setSelectedSteamAppId(appid)
@@ -4081,11 +4158,8 @@ function App(): React.JSX.Element {
             className="detail-bg fade-in-bg"
             style={detailBgStyle}
           />
-          <button className="detail-back-button" onClick={handleCloseDetail}>
+          <button className={`detail-back-button detail-focusable${detailFocusIndex === 0 ? ' detail-focused' : ''}`} onClick={handleCloseDetail}>
             <ChevronLeftIcon size={18} /> {t.btnBack}
-          </button>
-          <button className="detail-close" onClick={handleCloseDetail}>
-            <CloseIcon size={20} />
           </button>
 
           <div className="detail-hero-section">
@@ -4143,14 +4217,14 @@ function App(): React.JSX.Element {
                   {detailScreenshots.length > 1 && (
                     <>
                       <button
-                        className="detail-carousel-nav prev"
+                        className={`detail-carousel-nav prev detail-focusable${detailFocusIndex === 2 ? ' detail-focused' : ''}`}
                         onClick={handlePrevShot}
                         aria-label={t.prevScreenshot}
                       >
                         <ChevronLeftIcon size={20} />
                       </button>
                       <button
-                        className="detail-carousel-nav next"
+                        className={`detail-carousel-nav next detail-focusable${detailFocusIndex === 3 ? ' detail-focused' : ''}`}
                         onClick={handleNextShot}
                         aria-label={t.nextScreenshot}
                       >
@@ -4392,9 +4466,11 @@ function App(): React.JSX.Element {
                   : null
                 const showProgress = isDownloading && activeDownload && activeDownload.percent > 0
 
+                const hasShots = detailScreenshots.length > 1
+                const playIdx = hasShots ? 4 : 2
                 return (
                   <button
-                    className={`btn-play btn-play-detail ${isRunning ? 'running' : ''} ${isDownloading ? 'downloading' : ''}`}
+                    className={`btn-play btn-play-detail detail-focusable${detailFocusIndex === playIdx ? ' detail-focused' : ''} ${isRunning ? 'running' : ''} ${isDownloading ? 'downloading' : ''}`}
                     onClick={() => handleLaunchGame(detailGame.id)}
                   >
                     {isRunning ? (
@@ -4431,16 +4507,21 @@ function App(): React.JSX.Element {
                   </button>
                 )
               })()}
-              <button
-                className="detail-edit-button"
-                onClick={() => {
-                  if (detailGame.id) openEditGameModal(detailGame.id)
-                  setContextMenu((p) => ({ ...p, visible: false }))
-                }}
-                aria-label={t.editGame}
-              >
-                <MoreIcon size={20} />
-              </button>
+              {(() => {
+                const editIdx = detailScreenshots.length > 1 ? 5 : 3
+                return (
+                  <button
+                    className={`detail-edit-button detail-focusable${detailFocusIndex === editIdx ? ' detail-focused' : ''}`}
+                    onClick={() => {
+                      if (detailGame.id) openEditGameModal(detailGame.id)
+                      setContextMenu((p) => ({ ...p, visible: false }))
+                    }}
+                    aria-label={t.editGame}
+                  >
+                    <MoreIcon size={20} />
+                  </button>
+                )
+              })()}
             </div>
 
           </div>
