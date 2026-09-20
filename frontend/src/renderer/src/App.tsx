@@ -2913,10 +2913,11 @@ function App(): React.JSX.Element {
       }
 
       if (sidebarOpen) {
+        const maxSidebar = 7 + sidebarExtensions.length
         if (e.key === 'ArrowDown') {
           e.preventDefault()
           setSidebarIndex((prev) => {
-            const next = Math.min(prev + 1, 6)
+            const next = Math.min(prev + 1, maxSidebar)
             if (next !== prev) playMove()
             return next
           })
@@ -2937,7 +2938,11 @@ function App(): React.JSX.Element {
           else if (sidebarIndex === 4) setShowDownloadsModal(true)
           else if (sidebarIndex === 5) setModal('extensions')
           else if (sidebarIndex === 6) setModal('settings')
-          else if (sidebarIndex === 7) window.api.quitApp()
+          else if (sidebarIndex >= 7 && sidebarIndex < 7 + sidebarExtensions.length) {
+            const ext = sidebarExtensions[sidebarIndex - 7]
+            if (ext) openExtension(ext)
+          }
+          else if (sidebarIndex === 7 + sidebarExtensions.length) window.api.quitApp()
           setSidebarOpen(false)
         } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Escape') {
           e.preventDefault()
@@ -3569,8 +3574,13 @@ function App(): React.JSX.Element {
         <button className={`sidebar-item ${sidebarIndex === 6 ? 'focused' : ''}`} onClick={() => { setModal('settings'); setSidebarOpen(false); }}>
           <div className="sidebar-item-icon"><SettingsIcon size={18} /></div> {t.settings}
         </button>
+        {sidebarExtensions.map((ext, i) => (
+          <button key={ext.id} className={`sidebar-item ${sidebarIndex === 7 + i ? 'focused' : ''}`} onClick={() => { openExtension(ext); setSidebarOpen(false); }}>
+            <div className="sidebar-item-icon"><ExtensionIcon size={18} /></div> {ext.name}
+          </button>
+        ))}
         <div style={{ marginTop: 'auto' }}>
-          <button className={`sidebar-item ${sidebarIndex === 7 ? 'focused' : ''}`} onClick={() => window.api.quitApp()}>
+          <button className={`sidebar-item ${sidebarIndex === 7 + sidebarExtensions.length ? 'focused' : ''}`} onClick={() => window.api.quitApp()}>
             <div className="sidebar-item-icon"><PowerIcon size={18} /></div> {t.exit}
           </button>
         </div>
@@ -4003,7 +4013,7 @@ function App(): React.JSX.Element {
                         className="friend-avatar-image"
                         draggable={false}
                       />
-                      {isFriendActive(friend) && <span className="friend-avatar-status" aria-label="Activo" />}
+                      {/* {isFriendActive(friend) && <span className="friend-avatar-status" aria-label="Activo" />} */}
                     </>
                   ) : (
                     <span className="friend-avatar-empty" />
