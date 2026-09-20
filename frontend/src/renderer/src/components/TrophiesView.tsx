@@ -315,7 +315,7 @@ const TrophiesView: React.FC<TrophiesViewProps> = ({
                     loading ? (
                         <div className="trophies-row">
                             {Array.from({ length: 6 }).map((_, i) => (
-                                <div key={i} className="trophy-card shimmer" style={{ height: '150px' }} />
+                                <div key={i} className="trophy-card shimmer" />
                             ))}
                         </div>
                     ) : achievements.length === 0 ? (
@@ -374,7 +374,7 @@ const TrophiesView: React.FC<TrophiesViewProps> = ({
                 ) : loadingNews && !newsFetched ? (
                     <div className="trophies-row">
                         {Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="news-card shimmer" style={{ height: '155px', width: '250px' }} />
+                            <div key={i} className="news-card shimmer" />
                         ))}
                     </div>
                 ) : news.length === 0 ? (
