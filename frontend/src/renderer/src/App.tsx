@@ -32,6 +32,7 @@ import { DownloadsModal } from './components/DownloadsModal'
 import { ModalHelper } from './components/ModalHelper'
 
 import MultimediaView from './components/MultimediaView';
+import ExtensionView from './components/ExtensionView';
 import MediaDetailView, { MediaItem } from './components/MediaDetailView';
 import { useFriendNotifications } from './hooks/useFriendNotifications'
 import { useSteamDownloads } from './hooks/useSteamDownloads'
@@ -500,6 +501,7 @@ function App(): React.JSX.Element {
   const [modal, setModal] = useState<ModalType>(null)
   const [nativeView, setNativeView] = useState<'multimedia' | null>(null)
   const [activeEmbeddedView, setActiveEmbeddedView] = useState<string | null>(null)
+  const [activeExtension, setActiveExtension] = useState<LauncherExtension | null>(null)
   const [multimediaExtensionId, setMultimediaExtensionId] = useState<string | null>(null)
   const [animeAV1Latest, setAnimeAV1Latest] = useState<MultimediaCard[]>([])
   const [mediaDetail, setMediaDetail] = useState<MediaItem | null>(null)
@@ -578,12 +580,9 @@ function App(): React.JSX.Element {
   }, [])
 
   const openExtension = useCallback((extension: LauncherExtension): void => {
-    if (extension.type === 'embedded' && extension.viewId) {
-      setNativeView(null)
-      setActiveEmbeddedView(extension.viewId)
-      return
-    }
-    if (extension.entryUrl) void window.api.openExternal(extension.entryUrl)
+    setNativeView(null)
+    setActiveEmbeddedView(null)
+    setActiveExtension(extension)
   }, [])
 
   useEffect(() => {
@@ -2869,6 +2868,15 @@ function App(): React.JSX.Element {
         return
       }
 
+      if (activeExtension && !sidebarOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          playClose()
+          setActiveExtension(null)
+        }
+        return
+      }
+
       if (activeEmbeddedView && !sidebarOpen) {
         if (e.key === 'Escape') {
           e.preventDefault()
@@ -2927,7 +2935,7 @@ function App(): React.JSX.Element {
         } else if (e.key === 'Enter') {
           e.preventDefault()
           playEnter()
-          if (sidebarIndex === 0) { setNativeView(null); setActiveEmbeddedView(null); playHome() }
+          if (sidebarIndex === 0) { setNativeView(null); setActiveEmbeddedView(null); setActiveExtension(null); playHome() }
           else if (sidebarIndex === 1) openAddGameModal()
           else if (sidebarIndex === 2) handleOpenStore(defaultStore)
           else if (sidebarIndex === 3) handleOpenSpecs()
@@ -3229,7 +3237,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, activeEmbeddedView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, activeEmbeddedView, activeExtension, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
@@ -3649,6 +3657,16 @@ function App(): React.JSX.Element {
           sources={multimediaSources}
           onSourceChange={(sourceId) => { setMultimediaExtensionId(sourceId); setContinueWatchingIndex(0) }}
           onEpisodeClick={(item) => setMediaDetail(item)}
+        />
+      )}
+
+      {activeExtension && (
+        <ExtensionView
+          extension={activeExtension}
+          onClose={() => {
+            playClose()
+            setActiveExtension(null)
+          }}
         />
       )}
 
