@@ -83,12 +83,20 @@ if (typeof window !== 'undefined') {
   unlockEvents.forEach((e) => window.addEventListener(e, onFirstGesture, { once: true, passive: true } as AddEventListenerOptions))
 }
 
+let lastMoveTime = 0
+const MOVE_COOLDOWN_MS = 65
+
 function play(name: SoundName): void {
   try {
     unlockIfNeeded()
     const audio = getAudio(name)
     if (!audio) return
     if (name === 'move') {
+      const now = performance.now()
+      if (now - lastMoveTime < MOVE_COOLDOWN_MS) {
+        return
+      }
+      lastMoveTime = now
       const clone = audio.cloneNode() as HTMLAudioElement
       clone.volume = audio.volume
       clone.play().catch(() => {})

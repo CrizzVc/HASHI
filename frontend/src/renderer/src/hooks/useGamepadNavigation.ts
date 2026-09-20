@@ -41,6 +41,8 @@ const BUTTON_MAP: Record<number, NavKey> = {
   17: 'GamepadTouchpad'
 }
 
+const SNAPBACK_GUARD_MS = 80 // Evita rebote de stick o micro-fluctuaciones de zona muerta
+
 // Enter/Escape no deben "repetirse" solo por mantener el botón presionado
 const REPEATABLE_KEYS: NavKey[] = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
 
@@ -61,21 +63,21 @@ function dispatchNavKey(key: NavKey): void {
  *   useGamepadNavigation(isControllerConnected)
  */
 export function useGamepadNavigation(enabled: boolean = true): void {
-  // Guarda, por cada tecla virtual, cuándo debe repetirse y si ya se disparó
-  const heldRef = useRef<Record<NavKey, { next: number; fired: boolean }>>({
-    ArrowUp: { next: 0, fired: false },
-    ArrowDown: { next: 0, fired: false },
-    ArrowLeft: { next: 0, fired: false },
-    ArrowRight: { next: 0, fired: false },
-    Enter: { next: 0, fired: false },
-    Escape: { next: 0, fired: false },
-    MediaTrackPrevious: { next: 0, fired: false },
-    MediaTrackNext: { next: 0, fired: false },
-    BrowserBack: { next: 0, fired: false },
-    BrowserForward: { next: 0, fired: false },
-    ContextMenu: { next: 0, fired: false },
-    GamepadTouchpad: { next: 0, fired: false },
-    Start: { next: 0, fired: false }
+  // Guarda, por cada tecla virtual, cuándo debe repetirse, si ya se disparó y cuándo fue la última vez
+  const heldRef = useRef<Record<NavKey, { next: number; fired: boolean; lastFired: number }>>({
+    ArrowUp: { next: 0, fired: false, lastFired: 0 },
+    ArrowDown: { next: 0, fired: false, lastFired: 0 },
+    ArrowLeft: { next: 0, fired: false, lastFired: 0 },
+    ArrowRight: { next: 0, fired: false, lastFired: 0 },
+    Enter: { next: 0, fired: false, lastFired: 0 },
+    Escape: { next: 0, fired: false, lastFired: 0 },
+    MediaTrackPrevious: { next: 0, fired: false, lastFired: 0 },
+    MediaTrackNext: { next: 0, fired: false, lastFired: 0 },
+    BrowserBack: { next: 0, fired: false, lastFired: 0 },
+    BrowserForward: { next: 0, fired: false, lastFired: 0 },
+    ContextMenu: { next: 0, fired: false, lastFired: 0 },
+    GamepadTouchpad: { next: 0, fired: false, lastFired: 0 },
+    Start: { next: 0, fired: false, lastFired: 0 }
   })
 
   useEffect(() => {
@@ -117,9 +119,14 @@ export function useGamepadNavigation(enabled: boolean = true): void {
         }
 
         if (!state.fired) {
+          // Si soltó y volvió a pulsar demasiado rápido (rebote de stick), ignorar micro-pulsación
+          if (now - state.lastFired < SNAPBACK_GUARD_MS) {
+            return
+          }
           // Primera pulsación: dispara de inmediato
           dispatchNavKey(key)
           state.fired = true
+          state.lastFired = now
           state.next = REPEATABLE_KEYS.includes(key) ? now + INITIAL_DELAY_MS : Infinity
           return
         }
@@ -127,6 +134,7 @@ export function useGamepadNavigation(enabled: boolean = true): void {
         if (REPEATABLE_KEYS.includes(key) && now >= state.next) {
           // Mantenido: repite mientras siga presionado (solo direccionales)
           dispatchNavKey(key)
+          state.lastFired = now
           state.next = now + REPEAT_INTERVAL_MS
         }
       })
