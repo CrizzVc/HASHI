@@ -831,6 +831,7 @@ function App(): React.JSX.Element {
   const previousHomeSelectedGameIdRef = useRef<string | null>(null)
   const detailFromLibraryRef = useRef(false)
   const lastNavTimeRef = useRef(0)
+  const detailBottomFocusRef = useRef(1)
 
   const visibleGames = useMemo(() => getRecentGames(games), [games])
   const sortedLibraryGames = useMemo(() => sortGamesByNewestFirst(games), [games])
@@ -1659,7 +1660,17 @@ function App(): React.JSX.Element {
             setDetailScreenshots(shots)
             // If focus was at index 1 (Play when no shots), move to index 3 (Play with shots)
             if (shots.length > 1) {
-              setDetailFocusIndex((prev) => (prev === 1 ? 3 : prev))
+              setDetailFocusIndex((prev) => {
+                if (prev === 1) {
+                  detailBottomFocusRef.current = 3
+                  return 3
+                }
+                if (prev === 2) {
+                  detailBottomFocusRef.current = 4
+                  return 4
+                }
+                return prev
+              })
             }
           }
         }
@@ -1681,6 +1692,12 @@ function App(): React.JSX.Element {
       cancelled = true
     }
   }, [detailGameId, language])
+
+  useEffect(() => {
+    if (!detailGameId) return
+    setDetailFocusIndex(1)
+    detailBottomFocusRef.current = 1
+  }, [detailGameId])
 
   // ── Close detail view with Escape (sonido close) ──
   useEffect(() => {
@@ -3005,38 +3022,39 @@ function App(): React.JSX.Element {
           const hasShots = detailScreenshots.length > 1
           const playIdx = hasShots ? 3 : 1
           const editIdx = hasShots ? 4 : 2
-          // 0=Back, 1=ShotPrev, 2=ShotNext, playIdx=Play, editIdx=Edit
+          // Back
+          //   ↓
+          // ShotPrev ←→ ShotNext → Play ←→ Edit
+          const bottomRow = hasShots ? [1, 2, playIdx, editIdx] : [playIdx, editIdx]
 
-          let next = detailFocusIndex
+          const moveDetailFocus = (next: number): void => {
+            if (next === detailFocusIndex) return
+            playMove()
+            if (next !== 0) detailBottomFocusRef.current = next
+            setDetailFocusIndex(next)
+          }
 
           if (e.key === 'ArrowRight') {
             e.preventDefault()
-            playMove()
-            if (detailFocusIndex === 0) next = hasShots ? 1 : playIdx  // Back → ShotPrev or Play
-            else if (hasShots && detailFocusIndex === 1) next = 2      // ShotPrev → ShotNext
-            else if (hasShots && detailFocusIndex === 2) next = playIdx // ShotNext → Play
-            else if (detailFocusIndex === playIdx) next = editIdx       // Play → Edit
+            const i = bottomRow.indexOf(detailFocusIndex)
+            if (i >= 0 && i < bottomRow.length - 1) moveDetailFocus(bottomRow[i + 1])
           } else if (e.key === 'ArrowLeft') {
             e.preventDefault()
-            playMove()
-            if (hasShots && detailFocusIndex === 2) next = 1           // ShotNext → ShotPrev
-            else if (detailFocusIndex === editIdx) next = playIdx       // Edit → Play
-            else if (detailFocusIndex === playIdx && hasShots) next = 2 // Play → ShotNext
-            else if (detailFocusIndex === playIdx) next = 0             // Play → Back (no shots)
+            const i = bottomRow.indexOf(detailFocusIndex)
+            if (i > 0) moveDetailFocus(bottomRow[i - 1])
           } else if (e.key === 'ArrowDown') {
             e.preventDefault()
-            playMove()
-            if (detailFocusIndex === 0) next = hasShots ? 1 : playIdx  // Back → ShotPrev or Play
+            if (detailFocusIndex === 0) {
+              const remembered = detailBottomFocusRef.current
+              moveDetailFocus(bottomRow.includes(remembered) ? remembered : playIdx)
+            }
           } else if (e.key === 'ArrowUp') {
             e.preventDefault()
-            playMove()
-            if (detailFocusIndex === playIdx) next = 0                  // Play → Back
-            else if (hasShots && (detailFocusIndex === 1 || detailFocusIndex === 2)) next = 0 // Shots → Back
+            if (bottomRow.includes(detailFocusIndex)) moveDetailFocus(0)
           } else if (e.key === 'Enter') {
             e.preventDefault()
             playEnter()
             if (detailFocusIndex === 0) {
-              // Back
               if (detailFromLibraryRef.current) {
                 detailFromLibraryRef.current = false
                 setDetailGameId(null)
@@ -3053,10 +3071,7 @@ function App(): React.JSX.Element {
             } else if (detailFocusIndex === editIdx) {
               if (detailGame?.id) openEditGameModal(detailGame.id)
             }
-            return
           }
-
-          if (next !== detailFocusIndex) setDetailFocusIndex(next)
           return
         }
 
@@ -3104,7 +3119,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocusIndex, detailScreenshots.length, detailGame, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
@@ -3120,7 +3135,8 @@ function App(): React.JSX.Element {
 
   const openDetailView = useCallback((gameId: string) => {
     playEnter()
-    setDetailFocusIndex(1) // Play (or ShotPrev if screenshots load later)
+    setDetailFocusIndex(1) // Play; remapped to 3 if screenshots appear
+    detailBottomFocusRef.current = 1
     if (gameId.startsWith('steam-')) {
       const appid = gameId.replace(/^steam-/, '')
       setSelectedSteamAppId(appid)
