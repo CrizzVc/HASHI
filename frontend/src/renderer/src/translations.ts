@@ -219,6 +219,8 @@ export interface TranslationSchema {
   checkingUpdates: string
   downloadUpdate: string
   checkNewVersions: string
+  updateAvailable: string
+  updateAvailableDesc: string
   otherTitle: string
   otherSubtitle: string
   defaultStore: string
@@ -499,6 +501,8 @@ export const translations: Record<Language, TranslationSchema> = {
     checkingUpdates: 'Buscando...',
     downloadUpdate: 'Descargar actualización',
     checkNewVersions: 'Comprobar nuevas versiones',
+    updateAvailable: 'Hay una actualización disponible.',
+    updateAvailableDesc: 'Haz clic para descargar la nueva versión',
     otherTitle: 'Otros',
     otherSubtitle: 'Configuración general de la aplicación',
     defaultStore: 'Tienda por defecto',
@@ -756,6 +760,8 @@ export const translations: Record<Language, TranslationSchema> = {
     checkingUpdates: 'Checking...',
     downloadUpdate: 'Download update',
     checkNewVersions: 'Check for new versions',
+    updateAvailable: 'An update is available.',
+    updateAvailableDesc: 'Click to download the new version',
     otherTitle: 'Other',
     otherSubtitle: 'General application settings',
     defaultStore: 'Default store',

@@ -6086,6 +6086,56 @@
   font-weight: 400;
 }
 
+.notification-card-update {
+  border-left: 3px solid #f12540;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.notification-card-update:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 36px rgba(241, 37, 64, 0.2), 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.notification-avatar-update {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(241, 37, 64, 0.08);
+  padding: 12px;
+}
+
+.notification-avatar-update .notification-avatar-img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+.notification-update-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notification-hashi-logo {
+  height: 22px;
+  width: auto;
+  max-width: 90px;
+  object-fit: contain;
+  opacity: 0.95;
+}
+
+.notification-version-tag {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ff5e73;
+  background: rgba(241, 37, 64, 0.15);
+  border: 1px solid rgba(241, 37, 64, 0.35);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
 @keyframes notification-slide-in {
   from {
     opacity: 0;

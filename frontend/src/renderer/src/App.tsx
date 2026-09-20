@@ -28,6 +28,7 @@ import { translations, Language, t as tInterp } from './translations'
 import MusicPlayer from './components/MusicPlayer'
 import NotificationContainer from './components/NotificationContainer'
 import DownloadCompleteNotification from './components/DownloadCompleteNotification'
+import UpdateNotification, { UpdateNotificationData } from './components/UpdateNotification'
 import { DownloadsModal } from './components/DownloadsModal'
 import { ModalHelper } from './components/ModalHelper'
 
@@ -395,11 +396,7 @@ async function fetchAutoArtworkUrl(appName: string): Promise<string | null> {
         return squareGrids[0].url
       }
     }
-
-    const gridsRes = await fetch(`${BACKEND_URL}/api/steamgrid/grids/${gameId}`)
-    if (!gridsRes.ok) return null
-    const grids = await gridsRes.json()
-    return Array.isArray(grids) && grids.length > 0 ? grids[0].url || null : null
+    return null
   } catch (err) {
     console.error('Error auto-fetching artwork:', err)
     return null
@@ -611,6 +608,7 @@ function App(): React.JSX.Element {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
   const [updateLink, setUpdateLink] = useState<string | null>(null)
+  const [updateNotification, setUpdateNotification] = useState<UpdateNotificationData | null>(null)
   const [settingsWallpaperPage, setSettingsWallpaperPage] = useState(0)
   const [, setLogoClicks] = useState(0)
   const [logoIsRed, setLogoIsRed] = useState(false)
@@ -621,6 +619,39 @@ function App(): React.JSX.Element {
   const [omniconsole, setOmniconsole] = useState<boolean>(() => {
     try { return localStorage.getItem(OMNICONSOLE_STORAGE_KEY) === 'true' } catch { return false }
   })
+
+  // ── Comprobación automática de versión al iniciar ──
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null
+    const checkVersionOnStartup = async (): Promise<void> => {
+      try {
+        if (!window.api?.checkForUpdates) return
+        const data = await window.api.checkForUpdates()
+        if (data?.version) {
+          const cmp = compareVersions(data.version, APP_VERSION)
+          if (cmp > 0) {
+            setUpdateMessage(`Nueva versión encontrada: v${data.version}`)
+            if (data.link) setUpdateLink(data.link)
+            setUpdateNotification({
+              id: `update-${data.version}-${Date.now()}`,
+              version: data.version,
+              link: data.link
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('Auto update check failed:', err)
+      }
+    }
+
+    timer = setTimeout(() => {
+      void checkVersionOnStartup()
+    }, 2000)
+
+    return () => {
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
 
   // Sync omniconsole setting to main process on mount and when changed
   useEffect(() => {
@@ -2509,8 +2540,8 @@ function App(): React.JSX.Element {
       const quickId = sgdbTargetGameId.replace(/^quick-/, '')
       const quickUpdates: Record<string, string> = {}
       if (updates.iconDataUrl) quickUpdates.iconDataUrl = updates.iconDataUrl
-      if (updates.gridImageUrl || updates.squareGridImageUrl) {
-        quickUpdates.artworkUrl = updates.gridImageUrl || updates.squareGridImageUrl || ''
+      if (updates.squareGridImageUrl) {
+        quickUpdates.artworkUrl = updates.squareGridImageUrl
       }
 
       if (Object.keys(quickUpdates).length > 0) {
@@ -2577,7 +2608,7 @@ function App(): React.JSX.Element {
       if (!quickApp) return
       setSgdbTargetGameId(gameId)
       setSgdbSearch(quickApp.name)
-      setSgdbArtType('grids')
+      setSgdbArtType('square_grids')
       setSgdbResults([])
       setSgdbSelectedGame(null)
       setSgdbImages([])
@@ -5907,7 +5938,10 @@ function App(): React.JSX.Element {
                 </div>
 
                 <div className="sgdb-tabs">
-                  {(['square_grids', 'grids', 'heroes', 'logos', 'icons'] as SteamGridArtType[]).map((type) => (
+                  {(sgdbTargetGameId?.startsWith('quick-')
+                    ? (['square_grids'] as SteamGridArtType[])
+                    : (['square_grids', 'grids', 'heroes', 'logos', 'icons'] as SteamGridArtType[])
+                  ).map((type) => (
                     <button
                       key={type}
                       className={`sgdb-tab ${sgdbArtType === type ? 'active' : ''}`}
@@ -6067,6 +6101,19 @@ function App(): React.JSX.Element {
               language={language}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Version Update Notification ── */}
+      {updateNotification && (
+        <div className="notification-container">
+          <UpdateNotification
+            id={updateNotification.id}
+            version={updateNotification.version}
+            link={updateNotification.link}
+            onDismiss={() => setUpdateNotification(null)}
+            language={language}
+          />
         </div>
       )}
 
