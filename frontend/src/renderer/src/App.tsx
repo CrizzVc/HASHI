@@ -1655,7 +1655,13 @@ function App(): React.JSX.Element {
 
         if (!cancelled && shotsRes.ok) {
           const shots = await shotsRes.json()
-          if (Array.isArray(shots)) setDetailScreenshots(shots)
+          if (Array.isArray(shots)) {
+            setDetailScreenshots(shots)
+            // If focus was at index 1 (Play when no shots), move to index 3 (Play with shots)
+            if (shots.length > 1) {
+              setDetailFocusIndex((prev) => (prev === 1 ? 3 : prev))
+            }
+          }
         }
         if (!cancelled && detailsRes.ok) {
           const details = await detailsRes.json()
@@ -2997,58 +3003,40 @@ function App(): React.JSX.Element {
           }
 
           const hasShots = detailScreenshots.length > 1
-          const playIdx = hasShots ? 4 : 2
-          const editIdx = hasShots ? 5 : 3
-          // Focus indices: 0=Back, 1=Close, 2=ShotPrev?, 3=ShotNext?, playIdx=Play, editIdx=Edit
+          const playIdx = hasShots ? 3 : 1
+          const editIdx = hasShots ? 4 : 2
+          // 0=Back, 1=ShotPrev, 2=ShotNext, playIdx=Play, editIdx=Edit
 
           let next = detailFocusIndex
 
           if (e.key === 'ArrowRight') {
             e.preventDefault()
             playMove()
-            if (detailFocusIndex === 0) next = 1          // Back → Close
-            else if (hasShots && detailFocusIndex === 2) next = 3  // ShotPrev → ShotNext
-            else if (detailFocusIndex === playIdx) next = editIdx   // Play → Edit
+            if (detailFocusIndex === 0) next = hasShots ? 1 : playIdx  // Back → ShotPrev or Play
+            else if (hasShots && detailFocusIndex === 1) next = 2      // ShotPrev → ShotNext
+            else if (hasShots && detailFocusIndex === 2) next = playIdx // ShotNext → Play
+            else if (detailFocusIndex === playIdx) next = editIdx       // Play → Edit
           } else if (e.key === 'ArrowLeft') {
             e.preventDefault()
             playMove()
-            if (detailFocusIndex === 1) next = 0          // Close → Back
-            else if (hasShots && detailFocusIndex === 3) next = 2  // ShotNext → ShotPrev
-            else if (detailFocusIndex === editIdx) next = playIdx   // Edit → Play
+            if (hasShots && detailFocusIndex === 2) next = 1           // ShotNext → ShotPrev
+            else if (detailFocusIndex === editIdx) next = playIdx       // Edit → Play
+            else if (detailFocusIndex === playIdx && hasShots) next = 2 // Play → ShotNext
+            else if (detailFocusIndex === playIdx) next = 0             // Play → Back (no shots)
           } else if (e.key === 'ArrowDown') {
             e.preventDefault()
             playMove()
-            if (detailFocusIndex === 0 || detailFocusIndex === 1) {
-              // Back/Close → ShotPrev or Play
-              next = hasShots ? 2 : playIdx
-            } else if (hasShots && detailFocusIndex === 2) {
-              // ShotPrev → Play
-              next = playIdx
-            } else if (hasShots && detailFocusIndex === 3) {
-              // ShotNext → Play
-              next = playIdx
-            }
+            if (detailFocusIndex === 0) next = hasShots ? 1 : playIdx  // Back → ShotPrev or Play
           } else if (e.key === 'ArrowUp') {
             e.preventDefault()
             playMove()
-            if (hasShots && detailFocusIndex === 2) {
-              // ShotPrev → Back
-              next = 0
-            } else if (hasShots && detailFocusIndex === 3) {
-              // ShotNext → Close
-              next = 1
-            } else if (detailFocusIndex === playIdx) {
-              // Play → ShotPrev or Back
-              next = hasShots ? 2 : 0
-            } else if (detailFocusIndex === editIdx) {
-              // Edit → ShotNext or Close
-              next = hasShots ? 3 : 1
-            }
+            if (detailFocusIndex === playIdx) next = 0                  // Play → Back
+            else if (hasShots && (detailFocusIndex === 1 || detailFocusIndex === 2)) next = 0 // Shots → Back
           } else if (e.key === 'Enter') {
             e.preventDefault()
             playEnter()
-            if (detailFocusIndex === 0 || detailFocusIndex === 1) {
-              // Back / Close
+            if (detailFocusIndex === 0) {
+              // Back
               if (detailFromLibraryRef.current) {
                 detailFromLibraryRef.current = false
                 setDetailGameId(null)
@@ -3056,9 +3044,9 @@ function App(): React.JSX.Element {
               } else {
                 setDetailGameId(null)
               }
-            } else if (hasShots && detailFocusIndex === 2) {
+            } else if (hasShots && detailFocusIndex === 1) {
               handlePrevShot()
-            } else if (hasShots && detailFocusIndex === 3) {
+            } else if (hasShots && detailFocusIndex === 2) {
               handleNextShot()
             } else if (detailFocusIndex === playIdx) {
               if (detailGame) handleLaunchGame(detailGame.id)
@@ -3132,7 +3120,7 @@ function App(): React.JSX.Element {
 
   const openDetailView = useCallback((gameId: string) => {
     playEnter()
-    setDetailFocusIndex(0)
+    setDetailFocusIndex(1) // Play (or ShotPrev if screenshots load later)
     if (gameId.startsWith('steam-')) {
       const appid = gameId.replace(/^steam-/, '')
       setSelectedSteamAppId(appid)
@@ -4217,14 +4205,14 @@ function App(): React.JSX.Element {
                   {detailScreenshots.length > 1 && (
                     <>
                       <button
-                        className={`detail-carousel-nav prev detail-focusable${detailFocusIndex === 2 ? ' detail-focused' : ''}`}
+                        className={`detail-carousel-nav prev detail-focusable${detailFocusIndex === 1 ? ' detail-focused' : ''}`}
                         onClick={handlePrevShot}
                         aria-label={t.prevScreenshot}
                       >
                         <ChevronLeftIcon size={20} />
                       </button>
                       <button
-                        className={`detail-carousel-nav next detail-focusable${detailFocusIndex === 3 ? ' detail-focused' : ''}`}
+                        className={`detail-carousel-nav next detail-focusable${detailFocusIndex === 2 ? ' detail-focused' : ''}`}
                         onClick={handleNextShot}
                         aria-label={t.nextScreenshot}
                       >
@@ -4467,7 +4455,7 @@ function App(): React.JSX.Element {
                 const showProgress = isDownloading && activeDownload && activeDownload.percent > 0
 
                 const hasShots = detailScreenshots.length > 1
-                const playIdx = hasShots ? 4 : 2
+                const playIdx = hasShots ? 3 : 1
                 return (
                   <button
                     className={`btn-play btn-play-detail detail-focusable${detailFocusIndex === playIdx ? ' detail-focused' : ''} ${isRunning ? 'running' : ''} ${isDownloading ? 'downloading' : ''}`}
@@ -4508,7 +4496,7 @@ function App(): React.JSX.Element {
                 )
               })()}
               {(() => {
-                const editIdx = detailScreenshots.length > 1 ? 5 : 3
+                const editIdx = detailScreenshots.length > 1 ? 4 : 2
                 return (
                   <button
                     className={`detail-edit-button detail-focusable${detailFocusIndex === editIdx ? ' detail-focused' : ''}`}
