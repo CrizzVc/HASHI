@@ -17,8 +17,8 @@ interface NotificationProps {
   language?: Language
 }
 
-export default function Notification({ notification, onDismiss, language = 'es' }: NotificationProps): React.JSX.Element {
-  const t = translations[language] || translations.es
+export default function Notification({ notification, onDismiss, language = 'en' }: NotificationProps): React.JSX.Element {
+  const t = translations[language] || translations.en
   const [isExiting, setIsExiting] = useState(false)
   const onDismissRef = useRef(onDismiss)
   onDismissRef.current = onDismiss

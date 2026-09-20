@@ -13,11 +13,11 @@ interface ModalHelperProps {
 
 const HELPER_MODAL_STORAGE_KEY = 'gbl_has_seen_helper_modal'
 
-export const ModalHelper: React.FC<ModalHelperProps> = ({ isOpen, onClose, language = 'es' }) => {
+export const ModalHelper: React.FC<ModalHelperProps> = ({ isOpen, onClose, language = 'en' }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [dontShowAgain, setDontShowAgain] = useState(true)
 
-  const t = translations[language] || translations.es
+  const t = translations[language] || translations.en
 
   useEffect(() => {
     if (isOpen) {

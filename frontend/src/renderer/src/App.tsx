@@ -563,13 +563,13 @@ function App(): React.JSX.Element {
   const [settingsTab, setSettingsTab] = useState<'inicio' | 'personalizacion' | 'ayuda'>('inicio')
   const [language, setLanguage] = useState<Language>(() => {
     try {
-      return (localStorage.getItem('gbl-language') as Language) || 'es'
+      return (localStorage.getItem('gbl-language') as Language) || 'en'
     } catch {
-      return 'es'
+      return 'en'
     }
   })
 
-  const t = translations[language] || translations.es
+  const t = translations[language] || translations.en
 
   const loadExtensions = useCallback(async (): Promise<void> => {
     try {

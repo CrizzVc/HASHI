@@ -82,9 +82,9 @@ export const DownloadsModal: React.FC<DownloadsModalProps> = ({
   games,
   steamLibrary,
   onSelectGame,
-  language = 'es'
+  language = 'en'
 }) => {
-  const t = translations[language] || translations.es
+  const t = translations[language] || translations.en
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; appId: string | null }>({
     visible: false,
     x: 0,

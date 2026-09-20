@@ -17,7 +17,7 @@ interface NotificationContainerProps {
   language?: Language
 }
 
-export default function NotificationContainer({ notifications, onDismiss, language = 'es' }: NotificationContainerProps): React.JSX.Element {
+export default function NotificationContainer({ notifications, onDismiss, language = 'en' }: NotificationContainerProps): React.JSX.Element {
   const prevCountRef = useRef(notifications.length)
 
   useEffect(() => {

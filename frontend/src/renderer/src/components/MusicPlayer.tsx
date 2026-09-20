@@ -99,8 +99,8 @@ interface MusicPlayerProps {
   language?: Language
 }
 
-export default function MusicPlayer({ isVisible, isIdle = false, isGameRunning = false, language = 'es' }: MusicPlayerProps): React.JSX.Element {
-  const t = translations[language] || translations.es
+export default function MusicPlayer({ isVisible, isIdle = false, isGameRunning = false, language = 'en' }: MusicPlayerProps): React.JSX.Element {
+  const t = translations[language] || translations.en
   const { nowPlaying } = useSystemMedia(isGameRunning)
   const systemActive = Boolean(nowPlaying)
   const systemTarget = getMediaControlTarget(nowPlaying)

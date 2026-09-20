@@ -11,8 +11,8 @@ interface DownloadCompleteNotificationProps {
   language?: Language
 }
 
-export default function DownloadCompleteNotification({ id, name, iconUrl, onDismiss, language = 'es' }: DownloadCompleteNotificationProps): React.JSX.Element {
-  const t = translations[language] || translations.es
+export default function DownloadCompleteNotification({ id, name, iconUrl, onDismiss, language = 'en' }: DownloadCompleteNotificationProps): React.JSX.Element {
+  const t = translations[language] || translations.en
   const [isExiting, setIsExiting] = useState(false)
   const onDismissRef = useRef(onDismiss)
   onDismissRef.current = onDismiss

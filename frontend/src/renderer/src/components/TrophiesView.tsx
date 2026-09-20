@@ -43,7 +43,7 @@ const TrophiesView: React.FC<TrophiesViewProps> = ({
     achievements,
     loading = false,
     selectedIndex = 0,
-    language = 'es',
+    language = 'en',
     onClose
 }) => {
     const [tab, setTab] = useState<'trofeos' | 'news'>('trofeos')

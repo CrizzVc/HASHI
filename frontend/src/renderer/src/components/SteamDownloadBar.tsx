@@ -35,8 +35,8 @@ function getStatusText(dl: SteamDownloadItem, t: TranslationSchema): string {
   return t.statusQueued
 }
 
-export default function SteamDownloadBar({ downloads, language = 'es' }: SteamDownloadBarProps): React.JSX.Element | null {
-  const t = translations[language] || translations.es
+export default function SteamDownloadBar({ downloads, language = 'en' }: SteamDownloadBarProps): React.JSX.Element | null {
+  const t = translations[language] || translations.en
   const activeDownloads = useMemo(() => downloads.filter((dl) => dl.percent > 0 || dl.downloading || dl.validating), [downloads])
 
   if (activeDownloads.length === 0) return null
