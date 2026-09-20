@@ -3579,6 +3579,7 @@ function App(): React.JSX.Element {
         <button className={`sidebar-item ${sidebarIndex === 6 ? 'focused' : ''}`} onClick={() => { setModal('settings'); setSidebarOpen(false); }}>
           <div className="sidebar-item-icon"><SettingsIcon size={18} /></div> {t.settings}
         </button>
+        <div className="sidebar-divider" />
         {sidebarExtensions.map((ext, i) => (
           <button key={ext.id} className={`sidebar-item ${sidebarIndex === 7 + i ? 'focused' : ''}`} onClick={() => { openExtension(ext); setSidebarOpen(false); }}>
             <div className="sidebar-item-icon"><ExtensionIcon size={18} /></div> {ext.name}
