@@ -35,6 +35,7 @@ import MultimediaView from './components/MultimediaView';
 import MediaDetailView, { MediaItem } from './components/MediaDetailView';
 import { useFriendNotifications } from './hooks/useFriendNotifications'
 import { useSteamDownloads } from './hooks/useSteamDownloads'
+import TrophiesView from './components/TrophiesView'
 
 
 import steamLogo from './assets/tiendas/steamLogo.png'
@@ -3102,14 +3103,14 @@ function App(): React.JSX.Element {
               e.preventDefault()
               playClose()
               setAchievementsView(false)
-            } else if (e.key === 'ArrowDown' && detailAchievements.length > 0) {
+            } else if (e.key === 'ArrowRight' && detailAchievements.length > 0) {
               e.preventDefault()
               setAchievementListIndex((prev) => {
                 const next = Math.min(prev + 1, detailAchievements.length - 1)
                 if (next !== prev) playMove()
                 return next
               })
-            } else if (e.key === 'ArrowUp' && detailAchievements.length > 0) {
+            } else if (e.key === 'ArrowLeft' && detailAchievements.length > 0) {
               e.preventDefault()
               setAchievementListIndex((prev) => {
                 const next = Math.max(prev - 1, 0)
@@ -4639,67 +4640,19 @@ function App(): React.JSX.Element {
           </div>
 
           {/* ── Achievements List Overlay ── */}
-          {achievementsView && (
-            <div className="achievements-overlay" onClick={() => setAchievementsView(false)}>
-              <div className="achievements-panel" onClick={(e) => e.stopPropagation()}>
-                <div className="achievements-panel-header">
-                  <h2 className="achievements-panel-title">{t.achievements}</h2>
-                  <span className="achievements-panel-count">
-                    {detailAchievements.filter((a) => a.achieved).length} / {detailAchievements.length} {t.achievementsUnlocked}
-                  </span>
-                  <button className="achievements-panel-close" onClick={() => setAchievementsView(false)}>
-                    <CloseIcon size={20} />
-                  </button>
-                </div>
-                <div className="achievements-panel-list">
-                  {detailAchievements.length === 0 ? (
-                    <p className="achievements-empty">{t.noAchievements}</p>
-                  ) : (
-                    detailAchievements.map((ach, i) => {
-                      const iconUrl = ach.achieved ? (ach.icon || '') : (ach.icongray || ach.icon || '')
-                      return (
-                        <div
-                          key={ach.apiname + i}
-                          className={`achievements-item ${ach.achieved ? 'unlocked' : 'locked'} ${i === achievementListIndex ? 'selected' : ''}`}
-                        >
-                          <div className={`achievements-item-icon ${!iconUrl ? 'no-icon' : ''}`}>
-                            {iconUrl ? (
-                              <img
-                                src={iconUrl}
-                                alt=""
-                                className="achievements-item-icon-img"
-                                draggable={false}
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                              />
-                            ) : (
-                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                                <path d="M4 22h16" />
-                                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22" />
-                                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22" />
-                                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                              </svg>
-                            )}
-                          </div>
-                          <div className="achievements-item-info">
-                            <span className="achievements-item-name">{ach.displayName || ach.name || ach.apiname}</span>
-                            {ach.description && (
-                              <span className="achievements-item-desc">{ach.description}</span>
-                            )}
-                          </div>
-                          {ach.achieved && ach.unlocktime > 0 && (
-                            <span className="achievements-item-date">
-                              {new Date(ach.unlocktime * 1000).toLocaleDateString(language, { day: 'numeric', month: 'short', year: 'numeric' })}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            </div>
+          {achievementsView && detailGame && (
+            <TrophiesView
+              gameName={detailGame.name}
+              coverUrl={detailGame.squareGridImageUrl || detailGame.gridImageUrl || detailGame.iconDataUrl}
+              logoUrl={detailGame.logoImageUrl}
+              heroUrl={detailGame.heroImageUrl}
+              steamAppId={detailGame.steamAppId}
+              achievements={detailAchievements}
+              loading={detailInfoLoading}
+              selectedIndex={achievementListIndex}
+              language={language}
+              onClose={() => setAchievementsView(false)}
+            />
           )}
         </div>
       )}
