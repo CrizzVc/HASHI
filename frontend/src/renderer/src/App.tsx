@@ -1714,7 +1714,12 @@ function App(): React.JSX.Element {
                   achList.map((a: any) => ({
                     apiname: String(a.apiname || ''),
                     achieved: a.achieved ? 1 : 0,
-                    unlocktime: Number(a.unlocktime || 0)
+                    unlocktime: Number(a.unlocktime || 0),
+                    name: a.name || a.displayName || a.apiname || '',
+                    displayName: a.displayName || a.name || a.apiname || '',
+                    description: a.description || null,
+                    icon: a.icon || null,
+                    icongray: a.icongray || null
                   }))
                 )
               }
@@ -4622,6 +4627,53 @@ function App(): React.JSX.Element {
             </div>
 
           </div>
+
+          {/* ── Achievements List Overlay ── */}
+          {achievementsView && (
+            <div className="achievements-overlay" onClick={() => setAchievementsView(false)}>
+              <div className="achievements-panel" onClick={(e) => e.stopPropagation()}>
+                <div className="achievements-panel-header">
+                  <h2 className="achievements-panel-title">{t.achievements}</h2>
+                  <span className="achievements-panel-count">
+                    {detailAchievements.filter((a) => a.achieved).length} / {detailAchievements.length} {t.achievementsUnlocked}
+                  </span>
+                  <button className="achievements-panel-close" onClick={() => setAchievementsView(false)}>
+                    <CloseIcon size={20} />
+                  </button>
+                </div>
+                <div className="achievements-panel-list">
+                  {detailAchievements.length === 0 ? (
+                    <p className="achievements-empty">{t.noAchievements}</p>
+                  ) : (
+                    detailAchievements.map((ach, i) => (
+                      <div
+                        key={ach.apiname + i}
+                        className={`achievements-item ${ach.achieved ? 'unlocked' : 'locked'} ${i === achievementListIndex ? 'selected' : ''}`}
+                      >
+                        <img
+                          src={ach.achieved ? (ach.icon || '') : (ach.icongray || ach.icon || '')}
+                          alt=""
+                          className="achievements-item-icon"
+                          draggable={false}
+                        />
+                        <div className="achievements-item-info">
+                          <span className="achievements-item-name">{ach.displayName || ach.name || ach.apiname}</span>
+                          {ach.description && (
+                            <span className="achievements-item-desc">{ach.description}</span>
+                          )}
+                        </div>
+                        {ach.achieved && ach.unlocktime > 0 && (
+                          <span className="achievements-item-date">
+                            {new Date(ach.unlocktime * 1000).toLocaleDateString(language, { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

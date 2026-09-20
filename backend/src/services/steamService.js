@@ -358,29 +358,58 @@ export async function getSteamAchievements({ key, steamId, appid, lang }) {
   if (cached) return cached;
 
   try {
-    const res = await fetch(
-      `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v2/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}&l=${encodeURIComponent(steamLang)}`
-    );
-    if (!res.ok) {
-      throw new Error(`Steam achievements error ${res.status}`);
+    const playerUrl = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v2/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}&l=${encodeURIComponent(steamLang)}`;
+    const schemaUrl = `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?appid=${encodeURIComponent(appid)}&key=${encodeURIComponent(key)}`;
+
+    const [playerRes, schemaRes] = await Promise.all([
+      fetch(playerUrl),
+      fetch(schemaUrl).catch(() => null)
+    ]);
+
+    if (!playerRes.ok) {
+      if (playerRes.status === 404) {
+        setCache(achievementsKey, []);
+        return [];
+      }
+      throw new Error(`Steam achievements error ${playerRes.status}`);
     }
 
-    const json = await res.json();
-    const achievements = Array.isArray(json?.playerstats?.achievements)
-      ? json.playerstats.achievements
+    const playerJson = await playerRes.json();
+    const achievements = Array.isArray(playerJson?.playerstats?.achievements)
+      ? playerJson.playerstats.achievements
       : [];
 
+    let schemaMap = {};
+    if (schemaRes && schemaRes.ok) {
+      try {
+        const schemaJson = await schemaRes.json();
+        const schemaAchievements = schemaJson?.game?.availableGameStats?.achievements || [];
+        for (const sa of schemaAchievements) {
+          schemaMap[sa.name] = {
+            displayName: sa.displayName || sa.name || '',
+            description: sa.description || '',
+            icon: sa.icon || '',
+            icongray: sa.icongray || ''
+          };
+        }
+      } catch {}
+    }
+
     const mapped = achievements
-      .map((achievement) => ({
-        apiname: String(achievement?.apiname || ''),
-        achieved: Boolean(achievement?.achieved),
-        unlocktime: Number(achievement?.unlocktime || 0),
-        name: achievement?.name || achievement?.displayName || achievement?.apiname || 'Logro desbloqueado',
-        displayName: achievement?.name || achievement?.displayName || achievement?.apiname || 'Logro desbloqueado',
-        description: achievement?.description || null,
-        icon: achievement?.icon || null,
-        icongray: achievement?.icongray || null
-      }))
+      .map((achievement) => {
+        const apiname = String(achievement?.apiname || '');
+        const schema = schemaMap[apiname] || {};
+        return {
+          apiname,
+          achieved: Boolean(achievement?.achieved),
+          unlocktime: Number(achievement?.unlocktime || 0),
+          name: schema.displayName || apiname,
+          displayName: schema.displayName || apiname,
+          description: schema.description || null,
+          icon: schema.icon || null,
+          icongray: schema.icongray || null
+        };
+      })
       .filter((achievement) => achievement.apiname);
 
     setCache(achievementsKey, mapped);
