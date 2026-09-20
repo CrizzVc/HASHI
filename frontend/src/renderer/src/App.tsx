@@ -3088,8 +3088,9 @@ function App(): React.JSX.Element {
 
           const hasShots = detailScreenshots.length > 1
           const bottomRow: DetailFocusId[] = hasShots
-            ? ['shotPrev', 'shotNext', 'achievements', 'play', 'edit']
-            : ['achievements', 'play', 'edit']
+            ? ['shotPrev', 'shotNext', 'play', 'edit']
+            : ['play', 'edit']
+          const midRow: DetailFocusId[] = ['achievements']
 
           const moveDetailFocus = (next: DetailFocusId): void => {
             if (next === detailFocus) return
@@ -3123,21 +3124,31 @@ function App(): React.JSX.Element {
 
           if (e.key === 'ArrowRight') {
             e.preventDefault()
-            const i = bottomRow.indexOf(detailFocus)
-            if (i >= 0 && i < bottomRow.length - 1) moveDetailFocus(bottomRow[i + 1])
+            if (bottomRow.includes(detailFocus)) {
+              const i = bottomRow.indexOf(detailFocus)
+              if (i >= 0 && i < bottomRow.length - 1) moveDetailFocus(bottomRow[i + 1])
+            }
           } else if (e.key === 'ArrowLeft') {
             e.preventDefault()
-            const i = bottomRow.indexOf(detailFocus)
-            if (i > 0) moveDetailFocus(bottomRow[i - 1])
+            if (bottomRow.includes(detailFocus)) {
+              const i = bottomRow.indexOf(detailFocus)
+              if (i > 0) moveDetailFocus(bottomRow[i - 1])
+            }
           } else if (e.key === 'ArrowDown') {
             e.preventDefault()
             if (detailFocus === 'back') {
+              moveDetailFocus('achievements')
+            } else if (midRow.includes(detailFocus)) {
               const remembered = detailBottomFocusRef.current
               moveDetailFocus(bottomRow.includes(remembered) ? remembered : 'play')
             }
           } else if (e.key === 'ArrowUp') {
             e.preventDefault()
-            if (bottomRow.includes(detailFocus)) moveDetailFocus('back')
+            if (bottomRow.includes(detailFocus)) {
+              moveDetailFocus('achievements')
+            } else if (midRow.includes(detailFocus)) {
+              moveDetailFocus('back')
+            }
           } else if (e.key === 'Enter') {
             e.preventDefault()
             playEnter()
