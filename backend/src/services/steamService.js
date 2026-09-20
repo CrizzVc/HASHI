@@ -353,37 +353,22 @@ function decodeHtmlEntities(value) {
 
 export async function getSteamAchievements({ key, steamId, appid, lang }) {
   const steamLang = lang === 'es' ? 'spanish' : 'english';
-  const achievementsKey = `achievements:${key}:${steamId}:${appid}:${steamLang}`;
+  const achievementsKey = `achievements:${key}:${steamId || 'none'}:${appid}:${steamLang}`;
   const cached = getCached(achievementsKey);
   if (cached) return cached;
 
   try {
-    const playerUrl = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v2/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}&l=${encodeURIComponent(steamLang)}`;
     const schemaUrl = `https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?appid=${encodeURIComponent(appid)}&key=${encodeURIComponent(key)}`;
 
-    const [playerRes, schemaRes] = await Promise.all([
-      fetch(playerUrl),
-      fetch(schemaUrl).catch(() => null)
-    ]);
-
-    if (!playerRes.ok) {
-      if (playerRes.status === 404) {
-        setCache(achievementsKey, []);
-        return [];
-      }
-      throw new Error(`Steam achievements error ${playerRes.status}`);
-    }
-
-    const playerJson = await playerRes.json();
-    const achievements = Array.isArray(playerJson?.playerstats?.achievements)
-      ? playerJson.playerstats.achievements
-      : [];
-
     let schemaMap = {};
+    let totalFromSchema = 0;
+
+    const schemaRes = await fetch(schemaUrl).catch(() => null);
     if (schemaRes && schemaRes.ok) {
       try {
         const schemaJson = await schemaRes.json();
         const schemaAchievements = schemaJson?.game?.availableGameStats?.achievements || [];
+        totalFromSchema = schemaAchievements.length;
         for (const sa of schemaAchievements) {
           schemaMap[sa.name] = {
             displayName: sa.displayName || sa.name || '',
@@ -395,22 +380,64 @@ export async function getSteamAchievements({ key, steamId, appid, lang }) {
       } catch {}
     }
 
-    const mapped = achievements
-      .map((achievement) => {
-        const apiname = String(achievement?.apiname || '');
-        const schema = schemaMap[apiname] || {};
+    let playerMap = {};
+    if (steamId) {
+      try {
+        const playerUrl = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v2/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}&l=${encodeURIComponent(steamLang)}`;
+        const playerRes = await fetch(playerUrl);
+        if (playerRes.ok) {
+          const playerJson = await playerRes.json();
+          const achievements = playerJson?.playerstats?.achievements;
+          if (playerJson?.playerstats?.success && Array.isArray(achievements)) {
+            for (const a of achievements) {
+              if (a.apiname) {
+                playerMap[a.apiname] = {
+                  achieved: Boolean(a.achieved),
+                  unlocktime: Number(a.unlocktime || 0)
+                };
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    if (totalFromSchema === 0 && Object.keys(playerMap).length === 0) {
+      setCache(achievementsKey, []);
+      return [];
+    }
+
+    let mapped;
+    if (totalFromSchema > 0) {
+      mapped = Object.keys(schemaMap).map((apiname) => {
+        const player = playerMap[apiname] || {};
+        const schema = schemaMap[apiname];
         return {
           apiname,
-          achieved: Boolean(achievement?.achieved),
-          unlocktime: Number(achievement?.unlocktime || 0),
+          achieved: player.achieved || false,
+          unlocktime: player.unlocktime || 0,
           name: schema.displayName || apiname,
           displayName: schema.displayName || apiname,
           description: schema.description || null,
           icon: schema.icon || null,
           icongray: schema.icongray || null
         };
-      })
-      .filter((achievement) => achievement.apiname);
+      });
+    } else {
+      mapped = Object.keys(playerMap).map((apiname) => {
+        const player = playerMap[apiname];
+        return {
+          apiname,
+          achieved: player.achieved,
+          unlocktime: player.unlocktime,
+          name: apiname,
+          displayName: apiname,
+          description: null,
+          icon: null,
+          icongray: null
+        };
+      });
+    }
 
     setCache(achievementsKey, mapped);
     return mapped;

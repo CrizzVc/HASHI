@@ -1681,7 +1681,7 @@ function App(): React.JSX.Element {
         if (!appid) return
 
         const canFetchAchievements = Boolean(
-          steamAccount.linked && steamAccount.apiKey && (steamAccount.steamId64 || steamAccount.steamId)
+          steamAccount.apiKey
         )
 
         const [shotsRes, detailsRes] = await Promise.all([
@@ -1703,8 +1703,15 @@ function App(): React.JSX.Element {
         // Fetch achievements via backend (CSP blocks direct Steam API calls from renderer)
         if (!cancelled && canFetchAchievements) {
           try {
+            const steamIdParam = steamAccount.steamId64 || steamAccount.steamId || ''
+            const achParams = new URLSearchParams({
+              key: steamAccount.apiKey,
+              appid: String(appid),
+              lang: language
+            })
+            if (steamIdParam) achParams.set('steamId', steamIdParam)
             const achRes = await fetch(
-              `${BACKEND_URL}/api/steam/achievements?key=${encodeURIComponent(steamAccount.apiKey)}&steamId=${encodeURIComponent(steamAccount.steamId64 || steamAccount.steamId)}&appid=${encodeURIComponent(String(appid))}&lang=${encodeURIComponent(language)}`
+              `${BACKEND_URL}/api/steam/achievements?${achParams.toString()}`
             )
             if (!cancelled && achRes.ok) {
               const achData = await achRes.json()
@@ -4645,30 +4652,47 @@ function App(): React.JSX.Element {
                   {detailAchievements.length === 0 ? (
                     <p className="achievements-empty">{t.noAchievements}</p>
                   ) : (
-                    detailAchievements.map((ach, i) => (
-                      <div
-                        key={ach.apiname + i}
-                        className={`achievements-item ${ach.achieved ? 'unlocked' : 'locked'} ${i === achievementListIndex ? 'selected' : ''}`}
-                      >
-                        <img
-                          src={ach.achieved ? (ach.icon || '') : (ach.icongray || ach.icon || '')}
-                          alt=""
-                          className="achievements-item-icon"
-                          draggable={false}
-                        />
-                        <div className="achievements-item-info">
-                          <span className="achievements-item-name">{ach.displayName || ach.name || ach.apiname}</span>
-                          {ach.description && (
-                            <span className="achievements-item-desc">{ach.description}</span>
+                    detailAchievements.map((ach, i) => {
+                      const iconUrl = ach.achieved ? (ach.icon || '') : (ach.icongray || ach.icon || '')
+                      return (
+                        <div
+                          key={ach.apiname + i}
+                          className={`achievements-item ${ach.achieved ? 'unlocked' : 'locked'} ${i === achievementListIndex ? 'selected' : ''}`}
+                        >
+                          <div className={`achievements-item-icon ${!iconUrl ? 'no-icon' : ''}`}>
+                            {iconUrl ? (
+                              <img
+                                src={iconUrl}
+                                alt=""
+                                className="achievements-item-icon-img"
+                                draggable={false}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                              />
+                            ) : (
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                                <path d="M4 22h16" />
+                                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22" />
+                                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22" />
+                                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                              </svg>
+                            )}
+                          </div>
+                          <div className="achievements-item-info">
+                            <span className="achievements-item-name">{ach.displayName || ach.name || ach.apiname}</span>
+                            {ach.description && (
+                              <span className="achievements-item-desc">{ach.description}</span>
+                            )}
+                          </div>
+                          {ach.achieved && ach.unlocktime > 0 && (
+                            <span className="achievements-item-date">
+                              {new Date(ach.unlocktime * 1000).toLocaleDateString(language, { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </span>
                           )}
                         </div>
-                        {ach.achieved && ach.unlocktime > 0 && (
-                          <span className="achievements-item-date">
-                            {new Date(ach.unlocktime * 1000).toLocaleDateString(language, { day: 'numeric', month: 'short', year: 'numeric' })}
-                          </span>
-                        )}
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               </div>

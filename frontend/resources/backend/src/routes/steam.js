@@ -126,16 +126,13 @@ router.get('/achievements', async (req, res) => {
     if (!key || typeof key !== 'string' || !key.trim()) {
       return res.status(400).json({ error: 'Se requiere la API key de Steam' });
     }
-    if (!steamId || typeof steamId !== 'string' || !steamId.trim()) {
-      return res.status(400).json({ error: 'Se requiere el Steam ID o vanity URL' });
-    }
     if (!appid || typeof appid !== 'string' || !appid.trim()) {
       return res.status(400).json({ error: 'Se requiere el appid del juego' });
     }
 
-    const resolvedSteamId = await resolveSteamId(key.trim(), steamId.trim());
-    if (!resolvedSteamId) {
-      return res.status(404).json({ error: 'No se pudo resolver la cuenta de Steam' });
+    let resolvedSteamId = null;
+    if (steamId && typeof steamId === 'string' && steamId.trim()) {
+      resolvedSteamId = await resolveSteamId(key.trim(), steamId.trim());
     }
 
     const achievements = await getSteamAchievements({
