@@ -1,10 +1,11 @@
 {
   "id": "example",
   "name": "Extensión de Ejemplo",
-  "description": "Plantilla de extensión externa con frontend (HTML/CSS/JS) y mini backend en Express.",
+  "description": "Plantilla de extensión externa con frontend (HTML/CSS/JS) y mini backend en Express/Node.",
   "version": "1.0.0",
   "type": "external",
   "entryUrl": "http://localhost:3001",
+  "backendEntry": "backend/server.js",
   "sidebar": true,
   "enabled": true
 }

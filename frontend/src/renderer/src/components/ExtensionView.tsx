@@ -9,6 +9,7 @@ export interface LauncherExtension {
   type: 'external' | 'native' | 'embedded'
   entryUrl: string | null
   viewId: string | null
+  backendEntry?: string | null
   sidebar: boolean
   enabled: boolean
 }

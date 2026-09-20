@@ -1,19 +1,22 @@
-const express = require('express')
-const cors = require('cors')
+const http = require('http')
 const https = require('https')
+const fs = require('fs')
 const path = require('path')
 
-const app = express()
 const PORT = process.env.PORT || 3001
-
-app.use(cors())
-app.use(express.json())
-
-// Servir el frontend de la extensión de forma estática
 const frontendDir = path.join(__dirname, '..', 'frontend')
-app.use(express.static(frontendDir))
-
 const HASHI_API_URL = 'https://crizzvc.github.io/Hashi-API/api.json'
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+}
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -28,40 +31,76 @@ function fetchJson(url) {
         try {
           resolve(JSON.parse(data))
         } catch {
-          reject(new Error('Error parseando JSON de respuesta'))
+          reject(new Error('Error parseando JSON'))
         }
       })
     }).on('error', reject)
   })
 }
 
-// Endpoint de actualizaciones
-app.get('/api/updates', async (_req, res) => {
-  try {
-    const data = await fetchJson(HASHI_API_URL)
-    res.json(data)
-  } catch (err) {
-    res.status(500).json({ error: err.message })
-  }
-})
+// Servidor HTTP autónomo (usa módulos nativos de Node.js, no requiere npm install en producción)
+const server = http.createServer(async (req, res) => {
+  // Cabeceras CORS
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
-// Endpoint de salud / estado de la extensión
-app.get('/api/health', (_req, res) => {
-  res.json({
-    status: 'ok',
-    extension: 'example',
-    version: '1.0.0',
-    uptime: process.uptime(),
-    timestamp: new Date().toISOString()
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204)
+    res.end()
+    return
+  }
+
+  const urlPath = req.url ? req.url.split('?')[0] : '/'
+
+  // 1. Endpoint: /api/health
+  if (urlPath === '/api/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      status: 'ok',
+      extension: 'example',
+      version: '1.0.0',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
+    }))
+    return
+  }
+
+  // 2. Endpoint: /api/updates
+  if (urlPath === '/api/updates') {
+    try {
+      const data = await fetchJson(HASHI_API_URL)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(data))
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err.message }))
+    }
+    return
+  }
+
+  // 3. Servir archivos estáticos del frontend
+  let relativePath = urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, '')
+  let filePath = path.join(frontendDir, relativePath)
+
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    filePath = path.join(frontendDir, 'index.html')
+  }
+
+  const ext = path.extname(filePath).toLowerCase()
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream'
+
+  fs.readFile(filePath, (err, content) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
+      res.end('404 Archivo no encontrado')
+      return
+    }
+    res.writeHead(200, { 'Content-Type': contentType })
+    res.end(content)
   })
 })
 
-// Cualquier otra ruta no capturada envía el index.html del frontend
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(frontendDir, 'index.html'))
-})
-
-app.listen(PORT, () => {
-  console.log(`[HASHI Example Extension] Backend corriendo en http://localhost:${PORT}`)
-  console.log(`[HASHI Example Extension] Frontend servido en http://localhost:${PORT}`)
+server.listen(PORT, () => {
+  console.log(`[HASHI Example Extension] Servidor listo en http://localhost:${PORT}`)
 })

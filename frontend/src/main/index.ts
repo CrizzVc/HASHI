@@ -54,6 +54,8 @@ interface LauncherExtension {
   type: 'external' | 'native' | 'embedded'
   entryUrl: string | null
   viewId: string | null
+  backendEntry?: string | null
+  dirPath?: string
   sidebar: boolean
   enabled: boolean
 }
@@ -113,6 +115,11 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
           const type = (rawType === 'native' || rawType === 'embedded') ? rawType : 'external'
           const entryUrl = manifest.entryUrl
           const viewId = typeof manifest.viewId === 'string' ? manifest.viewId : null
+          const backendEntry = typeof manifest.backendEntry === 'string'
+            ? manifest.backendEntry
+            : typeof manifest.backend === 'string'
+              ? manifest.backend
+              : null
           const sidebar = manifest.sidebar === true
           const enabled = typeof manifest.enabled === 'boolean' ? manifest.enabled : true
 
@@ -130,6 +137,8 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
             type,
             entryUrl: type === 'external' && typeof entryUrl === 'string' ? entryUrl : null,
             viewId: type === 'embedded' ? viewId : null,
+            backendEntry,
+            dirPath: join(extensionsDir, entry.name),
             sidebar,
             enabled
           }]
@@ -141,6 +150,98 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
     console.warn('[Extensions] No se pudo leer el directorio:', error)
     return []
   }
+}
+
+// ── Extension Process Manager ──
+const runningExtensionProcesses = new Map<string, ChildProcess>()
+
+function startExtensionBackend(extension: LauncherExtension): void {
+  if (runningExtensionProcesses.has(extension.id)) return
+  if (!extension.enabled || !extension.backendEntry || !extension.dirPath) return
+
+  const scriptPath = join(extension.dirPath, extension.backendEntry)
+  if (!fs.existsSync(scriptPath)) {
+    console.warn(`[Extensions] Backend no encontrado para '${extension.id}': ${scriptPath}`)
+    return
+  }
+
+  try {
+    const child = fork(scriptPath, [], {
+      cwd: dirname(scriptPath),
+      env: {
+        ...process.env,
+        PORT: '3001'
+      },
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+    })
+
+    child.stdout?.on('data', (data) => {
+      console.log(`[Ext:${extension.id}] ${data.toString().trim()}`)
+    })
+
+    child.stderr?.on('data', (data) => {
+      console.error(`[Ext:${extension.id}:error] ${data.toString().trim()}`)
+    })
+
+    child.on('error', (err) => {
+      console.error(`[Ext:${extension.id}] Error en proceso:`, err.message)
+      runningExtensionProcesses.delete(extension.id)
+    })
+
+    child.on('exit', (code) => {
+      console.log(`[Ext:${extension.id}] Proceso finalizado (código ${code})`)
+      runningExtensionProcesses.delete(extension.id)
+    })
+
+    runningExtensionProcesses.set(extension.id, child)
+    console.log(`[Extensions] Backend auto-iniciado para '${extension.id}'`)
+  } catch (err: any) {
+    console.error(`[Extensions] Error iniciando backend para '${extension.id}':`, err.message)
+  }
+}
+
+function stopExtensionBackend(extensionId: string): void {
+  const child = runningExtensionProcesses.get(extensionId)
+  if (child && !child.killed) {
+    try {
+      child.kill()
+    } catch (e) {
+      console.warn(`[Extensions] Error deteniendo backend '${extensionId}':`, e)
+    }
+    runningExtensionProcesses.delete(extensionId)
+    console.log(`[Extensions] Backend detenido para '${extensionId}'`)
+  }
+}
+
+function syncExtensionProcesses(): void {
+  const extensions = readExtensions()
+  const activeIds = new Set<string>()
+
+  for (const ext of extensions) {
+    if (ext.enabled && ext.backendEntry) {
+      activeIds.add(ext.id)
+      startExtensionBackend(ext)
+    } else {
+      stopExtensionBackend(ext.id)
+    }
+  }
+
+  for (const [runningId] of runningExtensionProcesses) {
+    if (!activeIds.has(runningId)) {
+      stopExtensionBackend(runningId)
+    }
+  }
+}
+
+function stopAllExtensionBackends(): void {
+  for (const [, child] of runningExtensionProcesses) {
+    if (child && !child.killed) {
+      try {
+        child.kill()
+      } catch {}
+    }
+  }
+  runningExtensionProcesses.clear()
 }
 
 function readExtensions(): LauncherExtension[] {
@@ -214,6 +315,7 @@ function createTray(): void {
           tray?.destroy()
           tray = null
           stopBackend()
+          stopAllExtensionBackends()
           stopMediaSessionsBridge()
           app.exit(0)
         }
@@ -1151,6 +1253,7 @@ app.whenReady().then(() => {
     tray?.destroy()
     tray = null
     stopBackend()
+    stopAllExtensionBackends()
     stopMediaSessionsBridge()
     // app.exit() termina el proceso sin esperar eventos de ventana
     app.exit(0)
@@ -1466,13 +1569,16 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('get-extensions', () => {
-    return readExtensions()
+    const exts = readExtensions()
+    syncExtensionProcesses()
+    return exts
   })
   ipcMain.handle('set-extension-enabled', (_, id: string, enabled: boolean) => {
     try {
       const state = readExtensionsState()
       state[id] = enabled
       fs.writeFileSync(getExtensionsStatePath(), JSON.stringify(state, null, 2), 'utf8')
+      syncExtensionProcesses()
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }
@@ -2050,6 +2156,7 @@ app.whenReady().then(() => {
   })
 
   startBackend()
+  syncExtensionProcesses()
   startMediaSessionsBridge()
   createTray()
   createWindow()
@@ -2066,6 +2173,7 @@ app.whenReady().then(() => {
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   stopBackend()
+  stopAllExtensionBackends()
   stopMediaSessionsBridge()
   if (process.platform !== 'darwin') {
     app.quit()
@@ -2076,6 +2184,7 @@ app.on('before-quit', () => {
   tray?.destroy()
   tray = null
   stopBackend()
+  stopAllExtensionBackends()
   stopMediaSessionsBridge()
 })
 

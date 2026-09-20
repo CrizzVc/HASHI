@@ -1,41 +1,31 @@
 # Extensión de Ejemplo para HASHI Launcher
 
-Esta carpeta es una **plantilla de extensión externa** completamente autónoma para HASHI.
+Esta carpeta es una **plantilla de extensión externa** completamente autónoma para HASHI con **auto-arranque de backend**.
 
 ## 📁 Estructura del proyecto
 
 ```text
 example/
-├── manifest.json      # Configuración y metadatos para HASHI
+├── manifest.json      # Configuración y metadatos (incluye "backendEntry")
 ├── README.md          # Esta guía
 ├── frontend/          # Vista web (HTML, CSS, JS)
 │   ├── index.html     # Estructura de la interfaz
 │   ├── style.css      # Estilos visuales
 │   └── app.js         # Lógica del cliente y peticiones al backend
-└── backend/           # Mini backend con Express
-    ├── package.json   # Dependencias del servidor
-    └── server.js      # Servidor Express y endpoints API
+└── backend/           # Mini backend de la extensión
+    ├── package.json   # Metadatos del backend
+    └── server.js      # Servidor HTTP/API y servidor de archivos estáticos
 ```
 
-## 🚀 Cómo ponerla en marcha
+## 🚀 Cómo funciona el auto-arranque en HASHI
 
-1. **Instalar dependencias del backend:**
-   ```bash
-   cd backend
-   npm install
-   ```
+1. **Auto-inicio transparente:**
+   Cuando HASHI detecta la propiedad `"backendEntry": "backend/server.js"` en el `manifest.json`, el launcher **inicia automáticamente el backend como un subproceso en segundo plano**.
+   * No requiere abrir la terminal.
+   * Al cerrar HASHI o desactivar la extensión en el catálogo, HASHI apaga el subproceso automáticamente.
 
-2. **Iniciar el servidor backend:**
-   ```bash
-   npm start
-   ```
-   El servidor se iniciará en `http://localhost:3001` y servirá tanto los endpoints de API como la vista frontend.
-
-3. **Ver la extensión en HASHI:**
-   - Abre HASHI Launcher.
-   - Ve a la sección o modal de **Extensiones**.
-   - Haz clic en **Recargar**.
-   - ¡Verás la extensión activa y podrás abrirla directamente desde el launcher o el sidebar!
+2. **Sin dependencias obligatorias:**
+   El archivo `backend/server.js` de ejemplo utiliza las librerías estándar integradas en Node.js (`http`, `fs`, `path`, `https`), por lo que funciona al instante en cualquier máquina sin necesidad de ejecutar `npm install`.
 
 ## ⚙️ Configuración (`manifest.json`)
 
@@ -43,10 +33,11 @@ example/
 {
   "id": "example",
   "name": "Extensión de Ejemplo",
-  "description": "Plantilla de extensión externa con frontend (HTML/CSS/JS) y mini backend en Express.",
+  "description": "Plantilla de extensión externa con frontend (HTML/CSS/JS) y mini backend en Node.",
   "version": "1.0.0",
   "type": "external",
   "entryUrl": "http://localhost:3001",
+  "backendEntry": "backend/server.js",
   "sidebar": true,
   "enabled": true
 }
