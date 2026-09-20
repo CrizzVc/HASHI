@@ -36,16 +36,7 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({ extension, onClose }) => 
     }
   }, [extension.id])
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+
 
   const entryUrl = extension.entryUrl || 'about:blank'
 

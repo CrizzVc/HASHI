@@ -92,17 +92,19 @@ export const DownloadsModal: React.FC<DownloadsModalProps> = ({
     appId: null
   })
 
-  // Close on Escape key
+  // Close inner context menu on Escape key if open
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        onClose()
+      if (e.key === 'Escape' && contextMenu.visible) {
+        e.preventDefault()
+        e.stopPropagation()
+        setContextMenu({ visible: false, x: 0, y: 0, appId: null })
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
+  }, [isOpen, contextMenu.visible])
 
   const visibleDownloads = useMemo(() => {
     return downloads.filter((dl) => !forgottenDownloads.has(dl.appId))

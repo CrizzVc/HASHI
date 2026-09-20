@@ -1749,24 +1749,7 @@ function App(): React.JSX.Element {
     setAchievementListIndex(0)
   }, [detailGameId])
 
-  // ── Close detail view with Escape (sonido close) ──
-  useEffect(() => {
-    if (!detailGameId) return
-    const handleEsc = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      if (achievementsView) return
-      playClose()
-      if (detailFromLibraryRef.current) {
-        detailFromLibraryRef.current = false
-        setDetailGameId(null)
-        setLibraryView(true)
-      } else {
-        setDetailGameId(null)
-      }
-    }
-    window.addEventListener('keydown', handleEsc)
-    return () => window.removeEventListener('keydown', handleEsc)
-  }, [detailGameId, achievementsView])
+
 
   // ── Persist games ──
   const saveGames = useCallback(
@@ -2738,6 +2721,44 @@ function App(): React.JSX.Element {
         return
       }
 
+      if (showHelperModal) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          playClose()
+          setShowHelperModal(false)
+        }
+        return
+      }
+
+      if (pendingQuickApp) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          playClose()
+          setPendingQuickApp(null)
+        }
+        return
+      }
+
+      if (showDownloadsModal) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          playClose()
+          setShowDownloadsModal(false)
+        }
+        return
+      }
+
+      if (modal !== null) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          playClose()
+          if (modal === 'steamgrid') resetSgdbState()
+          if (modal === 'addGame' || modal === 'editGame') resetForm()
+          setModal(null)
+        }
+        return
+      }
+
       if (libraryView) {
         if (e.key === 'Escape') {
           e.preventDefault()
@@ -2807,14 +2828,6 @@ function App(): React.JSX.Element {
             setLibraryView(false)
             setDetailGameId(librarySelectedGame.id)
           }
-        }
-        return
-      }
-      if (modal !== null) {
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          playClose()
-          setModal(null)
         }
         return
       }
@@ -3211,7 +3224,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, activeEmbeddedView, activeExtension, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, showHelperModal, pendingQuickApp, showDownloadsModal, nativeView, activeEmbeddedView, activeExtension, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, downloadContextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal, resetSgdbState])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
