@@ -1,5 +1,5 @@
-# HASHI v1.0.0
-<img width="7000" height="3020" alt="Agregar un título" src="https://github.com/user-attachments/assets/0f17e714-61b2-4634-a0d8-6332c0b5da12" />
+# HASHI v1.0.1
+<img width="7000" height="3020" alt="Agregar un título (2)" src="https://github.com/user-attachments/assets/ea7b1c83-6d7a-4af5-bfd4-98ed508c67ea" />
 <img width="1919" height="1079" alt="Captura de pantalla 2026-09-04 225617" src="https://github.com/user-attachments/assets/ed0cd404-08bb-4abe-a638-b00e3865b4e0" />
 
 ## HOME VIEW
@@ -8,6 +8,11 @@
 ## DETAIL VIEW
 <img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/d9af6969-a233-4e77-84aa-5b60677dfe68" />
 
+## STEAM ACHIEVEMENT
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/46ea7141-7ea4-43f3-890f-35c222fe62fc" />
+
+## STEAM NEWS
+<img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/b0182e8c-ee0a-43b0-91ab-aeab7e5f48e2" />
 
 ## LOCAL GAMES
 <img width="1919" height="1079" alt="Captura de pantalla 2026-09-02 210054" src="https://github.com/user-attachments/assets/838ecdcb-c334-47fe-82ae-db8b2266ee6d" />
