@@ -122,7 +122,7 @@ router.get('/friends/:steamid/background', async (req, res) => {
 
 router.get('/achievements', async (req, res) => {
   try {
-    const { key, steamId, appid } = req.query;
+    const { key, steamId, appid, lang } = req.query;
     if (!key || typeof key !== 'string' || !key.trim()) {
       return res.status(400).json({ error: 'Se requiere la API key de Steam' });
     }
@@ -141,7 +141,8 @@ router.get('/achievements', async (req, res) => {
     const achievements = await getSteamAchievements({
       key: key.trim(),
       steamId: resolvedSteamId,
-      appid: appid.trim()
+      appid: appid.trim(),
+      lang: typeof lang === 'string' ? lang : 'en'
     });
 
     res.json({ appid: appid.trim(), achievements });

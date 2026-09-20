@@ -351,14 +351,15 @@ function decodeHtmlEntities(value) {
   return value.replace(/&amp;/g, '&').replace(/&quot;/g, '"');
 }
 
-export async function getSteamAchievements({ key, steamId, appid }) {
-  const achievementsKey = `achievements:${key}:${steamId}:${appid}`;
+export async function getSteamAchievements({ key, steamId, appid, lang }) {
+  const steamLang = lang === 'es' ? 'spanish' : 'english';
+  const achievementsKey = `achievements:${key}:${steamId}:${appid}:${steamLang}`;
   const cached = getCached(achievementsKey);
   if (cached) return cached;
 
   try {
     const res = await fetch(
-      `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v2/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}`
+      `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v2/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}&l=${encodeURIComponent(steamLang)}`
     );
     if (!res.ok) {
       throw new Error(`Steam achievements error ${res.status}`);

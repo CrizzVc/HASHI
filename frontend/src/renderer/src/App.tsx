@@ -36,6 +36,7 @@ import MediaDetailView, { MediaItem } from './components/MediaDetailView';
 import { useFriendNotifications } from './hooks/useFriendNotifications'
 import { useSteamDownloads } from './hooks/useSteamDownloads'
 
+
 import steamLogo from './assets/tiendas/steamLogo.png'
 import steamIcon from './assets/tiendas/steamIcon.png'
 import epicLogo from './assets/tiendas/EpicLogo.png'
@@ -118,6 +119,19 @@ interface QuickApp {
 }
 
 type ModalType = 'specs' | 'addGame' | 'editGame' | 'library' | 'settings' | 'steamgrid' | 'extensions' | null
+
+type DetailFocusId = 'back' | 'shotPrev' | 'shotNext' | 'achievements' | 'play' | 'edit'
+
+interface SteamAchievement {
+  apiname: string
+  achieved: number
+  unlocktime: number
+  name?: string
+  displayName?: string
+  description?: string | null
+  icon?: string | null
+  icongray?: string | null
+}
 
 interface LauncherExtension {
   id: string
@@ -441,6 +455,19 @@ function MoreIcon({ size = 20 }: { size?: number }): React.JSX.Element {
       <circle cx="5" cy="12" r="2" />
       <circle cx="12" cy="12" r="2" />
       <circle cx="19" cy="12" r="2" />
+    </svg>
+  )
+}
+
+function TrophyIcon({ size = 22 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 4h8v3a4 4 0 0 1-8 0V4z" />
+      <path d="M8 6H5.5A2.5 2.5 0 0 0 8 8.5" />
+      <path d="M16 6h2.5A2.5 2.5 0 0 1 16 8.5" />
+      <path d="M12 11v3" />
+      <path d="M9 20h6" />
+      <path d="M10 17h4v3h-4z" />
     </svg>
   )
 }
@@ -796,7 +823,10 @@ function App(): React.JSX.Element {
   const [detailScreenshots, setDetailScreenshots] = useState<Array<{ path_full: string; path_thumbnail: string }>>([])
   const [detailLoadingShots, setDetailLoadingShots] = useState(false)
   const [detailShotIndex, setDetailShotIndex] = useState(0)
-  const [detailFocusIndex, setDetailFocusIndex] = useState(0)
+  const [detailFocus, setDetailFocus] = useState<DetailFocusId>('play')
+  const [detailAchievements, setDetailAchievements] = useState<SteamAchievement[]>([])
+  const [achievementsView, setAchievementsView] = useState(false)
+  const [achievementListIndex, setAchievementListIndex] = useState(0)
   const [detailInfo, setDetailInfo] = useState<{
     description: string | null
     developer: string | null
@@ -831,7 +861,7 @@ function App(): React.JSX.Element {
   const previousHomeSelectedGameIdRef = useRef<string | null>(null)
   const detailFromLibraryRef = useRef(false)
   const lastNavTimeRef = useRef(0)
-  const detailBottomFocusRef = useRef(1)
+  const detailBottomFocusRef = useRef<DetailFocusId>('play')
 
   const visibleGames = useMemo(() => getRecentGames(games), [games])
   const sortedLibraryGames = useMemo(() => sortGamesByNewestFirst(games), [games])
@@ -1626,6 +1656,7 @@ function App(): React.JSX.Element {
       setDetailScreenshots([])
       setDetailInfo(null)
       setDetailShotIndex(0)
+      setDetailAchievements([])
       return
     }
     let cancelled = false
@@ -1635,6 +1666,7 @@ function App(): React.JSX.Element {
       setDetailScreenshots([])
       setDetailInfo(null)
       setDetailShotIndex(0)
+      setDetailAchievements([])
       try {
         // Steam entries already carry their AppID; local games still resolve by name.
         let appid = detailGame.steamAppId
@@ -1648,7 +1680,10 @@ function App(): React.JSX.Element {
         }
         if (!appid) return
 
-        // 2) Fetch screenshots and store details in parallel
+        const canFetchAchievements = Boolean(
+          steamAccount.linked && steamAccount.apiKey && (steamAccount.steamId64 || steamAccount.steamId)
+        )
+
         const [shotsRes, detailsRes] = await Promise.all([
           fetch(`${BACKEND_URL}/api/steam/screenshots/${appid}?lang=${language}`),
           fetch(`${BACKEND_URL}/api/steam/details/${appid}?lang=${language}`)
@@ -1658,25 +1693,35 @@ function App(): React.JSX.Element {
           const shots = await shotsRes.json()
           if (Array.isArray(shots)) {
             setDetailScreenshots(shots)
-            // If focus was at index 1 (Play when no shots), move to index 3 (Play with shots)
-            if (shots.length > 1) {
-              setDetailFocusIndex((prev) => {
-                if (prev === 1) {
-                  detailBottomFocusRef.current = 3
-                  return 3
-                }
-                if (prev === 2) {
-                  detailBottomFocusRef.current = 4
-                  return 4
-                }
-                return prev
-              })
-            }
           }
         }
         if (!cancelled && detailsRes.ok) {
           const details = await detailsRes.json()
           if (details) setDetailInfo(details)
+        }
+
+        // Fetch achievements via backend (CSP blocks direct Steam API calls from renderer)
+        if (!cancelled && canFetchAchievements) {
+          try {
+            const achRes = await fetch(
+              `${BACKEND_URL}/api/steam/achievements?key=${encodeURIComponent(steamAccount.apiKey)}&steamId=${encodeURIComponent(steamAccount.steamId64 || steamAccount.steamId)}&appid=${encodeURIComponent(String(appid))}&lang=${encodeURIComponent(language)}`
+            )
+            if (!cancelled && achRes.ok) {
+              const achData = await achRes.json()
+              const achList = achData?.achievements
+              if (Array.isArray(achList)) {
+                setDetailAchievements(
+                  achList.map((a: any) => ({
+                    apiname: String(a.apiname || ''),
+                    achieved: a.achieved ? 1 : 0,
+                    unlocktime: Number(a.unlocktime || 0)
+                  }))
+                )
+              }
+            }
+          } catch (achErr) {
+            console.error('Error fetching achievements via backend:', achErr)
+          }
         }
       } catch (err) {
         console.error('Error obteniendo información de Steam:', err)
@@ -1691,32 +1736,34 @@ function App(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [detailGameId, language])
+  }, [detailGameId, language, steamAccount.linked, steamAccount.apiKey, steamAccount.steamId, steamAccount.steamId64])
 
   useEffect(() => {
     if (!detailGameId) return
-    setDetailFocusIndex(1)
-    detailBottomFocusRef.current = 1
+    setDetailFocus('play')
+    detailBottomFocusRef.current = 'play'
+    setAchievementsView(false)
+    setAchievementListIndex(0)
   }, [detailGameId])
 
   // ── Close detail view with Escape (sonido close) ──
   useEffect(() => {
     if (!detailGameId) return
     const handleEsc = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        playClose()
-        if (detailFromLibraryRef.current) {
-          detailFromLibraryRef.current = false
-          setDetailGameId(null)
-          setLibraryView(true)
-        } else {
-          setDetailGameId(null)
-        }
+      if (e.key !== 'Escape') return
+      if (achievementsView) return
+      playClose()
+      if (detailFromLibraryRef.current) {
+        detailFromLibraryRef.current = false
+        setDetailGameId(null)
+        setLibraryView(true)
+      } else {
+        setDetailGameId(null)
       }
     }
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
-  }, [detailGameId])
+  }, [detailGameId, achievementsView])
 
   // ── Persist games ──
   const saveGames = useCallback(
@@ -3009,6 +3056,10 @@ function App(): React.JSX.Element {
           if (e.key === 'Escape') {
             e.preventDefault()
             playClose()
+            if (achievementsView) {
+              setAchievementsView(false)
+              return
+            }
             if (detailFromLibraryRef.current) {
               detailFromLibraryRef.current = false
               setDetailGameId(null)
@@ -3020,41 +3071,61 @@ function App(): React.JSX.Element {
           }
 
           const hasShots = detailScreenshots.length > 1
-          const playIdx = hasShots ? 3 : 1
-          const editIdx = hasShots ? 4 : 2
-          // Back
-          //   ↓
-          // ShotPrev ←→ ShotNext → Play ←→ Edit
-          const bottomRow = hasShots ? [1, 2, playIdx, editIdx] : [playIdx, editIdx]
+          const bottomRow: DetailFocusId[] = hasShots
+            ? ['shotPrev', 'shotNext', 'achievements', 'play', 'edit']
+            : ['achievements', 'play', 'edit']
 
-          const moveDetailFocus = (next: number): void => {
-            if (next === detailFocusIndex) return
+          const moveDetailFocus = (next: DetailFocusId): void => {
+            if (next === detailFocus) return
             playMove()
-            if (next !== 0) detailBottomFocusRef.current = next
-            setDetailFocusIndex(next)
+            if (next !== 'back') detailBottomFocusRef.current = next
+            setDetailFocus(next)
+          }
+
+          if (achievementsView) {
+            if (e.key === 'Escape') {
+              e.preventDefault()
+              playClose()
+              setAchievementsView(false)
+            } else if (e.key === 'ArrowDown' && detailAchievements.length > 0) {
+              e.preventDefault()
+              setAchievementListIndex((prev) => {
+                const next = Math.min(prev + 1, detailAchievements.length - 1)
+                if (next !== prev) playMove()
+                return next
+              })
+            } else if (e.key === 'ArrowUp' && detailAchievements.length > 0) {
+              e.preventDefault()
+              setAchievementListIndex((prev) => {
+                const next = Math.max(prev - 1, 0)
+                if (next !== prev) playMove()
+                return next
+              })
+            }
+            return
           }
 
           if (e.key === 'ArrowRight') {
             e.preventDefault()
-            const i = bottomRow.indexOf(detailFocusIndex)
+            const i = bottomRow.indexOf(detailFocus)
             if (i >= 0 && i < bottomRow.length - 1) moveDetailFocus(bottomRow[i + 1])
           } else if (e.key === 'ArrowLeft') {
             e.preventDefault()
-            const i = bottomRow.indexOf(detailFocusIndex)
+            const i = bottomRow.indexOf(detailFocus)
             if (i > 0) moveDetailFocus(bottomRow[i - 1])
           } else if (e.key === 'ArrowDown') {
             e.preventDefault()
-            if (detailFocusIndex === 0) {
+            if (detailFocus === 'back') {
               const remembered = detailBottomFocusRef.current
-              moveDetailFocus(bottomRow.includes(remembered) ? remembered : playIdx)
+              moveDetailFocus(bottomRow.includes(remembered) ? remembered : 'play')
             }
           } else if (e.key === 'ArrowUp') {
             e.preventDefault()
-            if (bottomRow.includes(detailFocusIndex)) moveDetailFocus(0)
+            if (bottomRow.includes(detailFocus)) moveDetailFocus('back')
           } else if (e.key === 'Enter') {
             e.preventDefault()
             playEnter()
-            if (detailFocusIndex === 0) {
+            if (detailFocus === 'back') {
               if (detailFromLibraryRef.current) {
                 detailFromLibraryRef.current = false
                 setDetailGameId(null)
@@ -3062,13 +3133,16 @@ function App(): React.JSX.Element {
               } else {
                 setDetailGameId(null)
               }
-            } else if (hasShots && detailFocusIndex === 1) {
+            } else if (hasShots && detailFocus === 'shotPrev') {
               handlePrevShot()
-            } else if (hasShots && detailFocusIndex === 2) {
+            } else if (hasShots && detailFocus === 'shotNext') {
               handleNextShot()
-            } else if (detailFocusIndex === playIdx) {
+            } else if (detailFocus === 'achievements') {
+              setAchievementListIndex(0)
+              setAchievementsView(true)
+            } else if (detailFocus === 'play') {
               if (detailGame) handleLaunchGame(detailGame.id)
-            } else if (detailFocusIndex === editIdx) {
+            } else if (detailFocus === 'edit') {
               if (detailGame?.id) openEditGameModal(detailGame.id)
             }
           }
@@ -3119,7 +3193,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocusIndex, detailScreenshots.length, detailGame, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
@@ -3135,8 +3209,8 @@ function App(): React.JSX.Element {
 
   const openDetailView = useCallback((gameId: string) => {
     playEnter()
-    setDetailFocusIndex(1) // Play; remapped to 3 if screenshots appear
-    detailBottomFocusRef.current = 1
+    setDetailFocus('play')
+    detailBottomFocusRef.current = 'play'
     if (gameId.startsWith('steam-')) {
       const appid = gameId.replace(/^steam-/, '')
       setSelectedSteamAppId(appid)
@@ -4162,21 +4236,47 @@ function App(): React.JSX.Element {
             className="detail-bg fade-in-bg"
             style={detailBgStyle}
           />
-          <button className={`detail-back-button detail-focusable${detailFocusIndex === 0 ? ' detail-focused' : ''}`} onClick={handleCloseDetail}>
+          <button className={`detail-back-button detail-focusable${detailFocus === 'back' ? ' detail-focused' : ''}`} onClick={handleCloseDetail}>
             <ChevronLeftIcon size={18} /> {t.btnBack}
           </button>
 
           <div className="detail-hero-section">
-            <div className="detail-hero-content">
-              {detailGame.logoImageUrl ? (
-                <img
-                  src={detailGame.logoImageUrl}
-                  alt={detailGame.name}
-                  className="hero-logo"
-                  draggable={false}
-                />
-              ) : (
-                <h1 className="hero-title">{detailGame.name}</h1>
+            <div className="detail-hero-top">
+              <div className="detail-hero-content">
+                {detailGame.logoImageUrl ? (
+                  <img
+                    src={detailGame.logoImageUrl}
+                    alt={detailGame.name}
+                    className="hero-logo"
+                    draggable={false}
+                  />
+                ) : (
+                  <h1 className="hero-title">{detailGame.name}</h1>
+                )}
+              </div>
+
+              {detailGame && (detailGame as any).steamAppId && (
+                <div
+                  className={`detail-achievements-card detail-focusable${detailFocus === 'achievements' ? ' detail-focused' : ''}`}
+                  onClick={() => { setAchievementListIndex(0); setAchievementsView(true) }}
+                >
+                  <div className="detail-achievements-icon">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                      <path d="M4 22h16" />
+                      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22" />
+                      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22" />
+                      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                    </svg>
+                  </div>
+                  <div className="detail-achievements-info">
+                    <span className="detail-achievements-count">
+                      {detailAchievements.filter((a) => a.achieved).length}/{detailAchievements.length || '…'}
+                    </span>
+                    <span className="detail-achievements-label">{t.achievements}</span>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -4221,14 +4321,14 @@ function App(): React.JSX.Element {
                   {detailScreenshots.length > 1 && (
                     <>
                       <button
-                        className={`detail-carousel-nav prev detail-focusable${detailFocusIndex === 1 ? ' detail-focused' : ''}`}
+                        className={`detail-carousel-nav prev detail-focusable${detailFocus === 'shotPrev' ? ' detail-focused' : ''}`}
                         onClick={handlePrevShot}
                         aria-label={t.prevScreenshot}
                       >
                         <ChevronLeftIcon size={20} />
                       </button>
                       <button
-                        className={`detail-carousel-nav next detail-focusable${detailFocusIndex === 2 ? ' detail-focused' : ''}`}
+                        className={`detail-carousel-nav next detail-focusable${detailFocus === 'shotNext' ? ' detail-focused' : ''}`}
                         onClick={handleNextShot}
                         aria-label={t.nextScreenshot}
                       >
@@ -4470,11 +4570,9 @@ function App(): React.JSX.Element {
                   : null
                 const showProgress = isDownloading && activeDownload && activeDownload.percent > 0
 
-                const hasShots = detailScreenshots.length > 1
-                const playIdx = hasShots ? 3 : 1
                 return (
                   <button
-                    className={`btn-play btn-play-detail detail-focusable${detailFocusIndex === playIdx ? ' detail-focused' : ''} ${isRunning ? 'running' : ''} ${isDownloading ? 'downloading' : ''}`}
+                    className={`btn-play btn-play-detail detail-focusable${detailFocus === 'play' ? ' detail-focused' : ''} ${isRunning ? 'running' : ''} ${isDownloading ? 'downloading' : ''}`}
                     onClick={() => handleLaunchGame(detailGame.id)}
                   >
                     {isRunning ? (
@@ -4511,21 +4609,16 @@ function App(): React.JSX.Element {
                   </button>
                 )
               })()}
-              {(() => {
-                const editIdx = detailScreenshots.length > 1 ? 4 : 2
-                return (
-                  <button
-                    className={`detail-edit-button detail-focusable${detailFocusIndex === editIdx ? ' detail-focused' : ''}`}
-                    onClick={() => {
-                      if (detailGame.id) openEditGameModal(detailGame.id)
-                      setContextMenu((p) => ({ ...p, visible: false }))
-                    }}
-                    aria-label={t.editGame}
-                  >
-                    <MoreIcon size={20} />
-                  </button>
-                )
-              })()}
+              <button
+                className={`detail-edit-button detail-focusable${detailFocus === 'edit' ? ' detail-focused' : ''}`}
+                onClick={() => {
+                  if (detailGame.id) openEditGameModal(detailGame.id)
+                  setContextMenu((p) => ({ ...p, visible: false }))
+                }}
+                aria-label={t.editGame}
+              >
+                <MoreIcon size={20} />
+              </button>
             </div>
 
           </div>
