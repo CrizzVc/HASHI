@@ -7107,7 +7107,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: flex-end;
-  min-height: 46vh;
+  min-height: 62vh;
   padding: 40px 48px 32px;
   overflow: hidden;
 }
@@ -7131,7 +7131,7 @@
 
 .trophies-close-button {
   position: absolute;
-  top: 24px;
+  top: 16px;
   left: 24px;
   z-index: 5;
   display: inline-flex;
@@ -7164,6 +7164,8 @@
   align-items: flex-end;
   gap: 32px;
   width: 100%;
+  margin-top: auto;
+  padding-top: 60px;
 }
 
 .trophies-cover {
