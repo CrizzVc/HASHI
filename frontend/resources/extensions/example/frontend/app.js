@@ -19,27 +19,27 @@ async function checkBackendHealth() {
     statusEl.querySelector('.status-text').textContent = `Backend: Online (v${data.version})`
   } catch (_err) {
     statusEl.className = 'status-indicator offline'
-    statusEl.querySelector('.status-text').textContent = 'Backend: Desconectado (Puerto 3001)'
+    statusEl.querySelector('.status-text').textContent = 'Backend: Disconnected (Port 3001)'
   }
 }
 
 // Check for updates
 btnCheckUpdates.addEventListener('click', async () => {
   btnCheckUpdates.disabled = true
-  btnCheckUpdates.querySelector('.btn-label').textContent = 'Consultando...'
+  btnCheckUpdates.querySelector('.btn-label').textContent = 'Checking...'
   resultContainer.classList.remove('hidden')
-  jsonOutput.textContent = 'Cargando respuesta del backend...'
+  jsonOutput.textContent = 'Loading backend response...'
 
   try {
     const res = await fetch(`${API_BASE}/api/updates`)
-    if (!res.ok) throw new Error(`Error HTTP ${res.status}: ${res.statusText}`)
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`)
     const data = await res.json()
     jsonOutput.textContent = JSON.stringify(data, null, 2)
   } catch (err) {
-    jsonOutput.textContent = `Error: ${err.message}\nAsegúrate de haber ejecutado 'npm start' en la carpeta backend/`
+    jsonOutput.textContent = `Error: ${err.message}\nMake sure you ran 'npm start' in the backend/ folder`
   } finally {
     btnCheckUpdates.disabled = false
-    btnCheckUpdates.querySelector('.btn-label').textContent = 'Buscar actualizaciones'
+    btnCheckUpdates.querySelector('.btn-label').textContent = 'Check for updates'
   }
 })
 
@@ -47,9 +47,9 @@ btnCheckUpdates.addEventListener('click', async () => {
 btnCopyJson.addEventListener('click', () => {
   if (!jsonOutput.textContent) return
   navigator.clipboard.writeText(jsonOutput.textContent)
-  btnCopyJson.textContent = '¡Copiado!'
+  btnCopyJson.textContent = 'Copied!'
   setTimeout(() => {
-    btnCopyJson.textContent = 'Copiar JSON'
+    btnCopyJson.textContent = 'Copy JSON'
   }, 2000)
 })
 

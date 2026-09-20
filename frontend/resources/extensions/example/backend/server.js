@@ -22,7 +22,7 @@ function fetchJson(url) {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
       if (res.statusCode !== 200) {
-        reject(new Error(`Error en la red: HTTP ${res.statusCode}`))
+        reject(new Error(`Network error: HTTP ${res.statusCode}`))
         return
       }
       let data = ''
@@ -31,16 +31,16 @@ function fetchJson(url) {
         try {
           resolve(JSON.parse(data))
         } catch {
-          reject(new Error('Error parseando JSON'))
+          reject(new Error('Failed to parse JSON response'))
         }
       })
     }).on('error', reject)
   })
 }
 
-// Servidor HTTP autónomo (usa módulos nativos de Node.js, no requiere npm install en producción)
+// Standalone HTTP server (uses Node.js native modules)
 const server = http.createServer(async (req, res) => {
-  // Cabeceras CORS
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -79,7 +79,7 @@ const server = http.createServer(async (req, res) => {
     return
   }
 
-  // 3. Servir archivos estáticos del frontend
+  // 3. Serve static frontend files
   let relativePath = urlPath === '/' ? 'index.html' : urlPath.replace(/^\//, '')
   let filePath = path.join(frontendDir, relativePath)
 
@@ -93,7 +93,7 @@ const server = http.createServer(async (req, res) => {
   fs.readFile(filePath, (err, content) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
-      res.end('404 Archivo no encontrado')
+      res.end('404 File Not Found')
       return
     }
     res.writeHead(200, { 'Content-Type': contentType })
@@ -102,5 +102,5 @@ const server = http.createServer(async (req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`[HASHI Example Extension] Servidor listo en http://localhost:${PORT}`)
+  console.log(`[HASHI Example Extension] Server running on http://localhost:${PORT}`)
 })

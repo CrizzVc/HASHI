@@ -1,18 +1,18 @@
 :root {
-  --bg-dark: #090a10;
-  --bg-card: rgba(18, 20, 32, 0.75);
-  --bg-card-hover: rgba(26, 29, 46, 0.9);
+  --bg-dark: #09090b;
+  --bg-card: #121215;
+  --bg-card-hover: #18181c;
   --border-color: rgba(255, 255, 255, 0.08);
-  --border-color-glow: rgba(147, 51, 234, 0.3);
-  --text-primary: #f3f4f6;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --accent-purple: #9333ea;
-  --accent-purple-light: #a855f7;
-  --accent-blue: #3b82f6;
-  --accent-cyan: #06b6d4;
-  --accent-green: #10b981;
-  --accent-red: #ef4444;
+  --border-color-hover: rgba(255, 255, 255, 0.18);
+  --border-red: rgba(220, 38, 38, 0.4);
+  --text-primary: #ffffff;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --accent-red: #dc2626;
+  --accent-red-hover: #b91c1c;
+  --accent-red-light: #ef4444;
+  --accent-red-subtle: rgba(220, 38, 38, 0.12);
+  --accent-green: #22c55e;
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
@@ -25,9 +25,6 @@
 
 body {
   background-color: var(--bg-dark);
-  background-image: 
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(120, 58, 237, 0.15), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 90%, rgba(59, 130, 246, 0.1), transparent);
   color: var(--text-primary);
   font-family: var(--font-sans);
   line-height: 1.6;
@@ -64,9 +61,9 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: rgba(147, 51, 234, 0.2);
-  color: var(--accent-purple-light);
-  border: 1px solid rgba(147, 51, 234, 0.4);
+  background: var(--accent-red-subtle);
+  color: var(--accent-red-light);
+  border: 1px solid var(--border-red);
 }
 
 .status-indicator {
@@ -79,6 +76,7 @@ body {
   font-weight: 500;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
+  color: var(--text-secondary);
 }
 
 .status-dot {
@@ -90,7 +88,6 @@ body {
 
 .status-indicator.online .status-dot {
   background: var(--accent-green);
-  box-shadow: 0 0 8px var(--accent-green);
 }
 
 .status-indicator.offline .status-dot {
@@ -101,9 +98,7 @@ h1 {
   font-size: 2.4rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #ffffff 40%, var(--accent-purple-light) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #ffffff;
 }
 
 .subtitle {
@@ -126,19 +121,19 @@ h1 {
 /* Cards */
 .extension-card {
   background: var(--bg-card);
-  backdrop-filter: blur(16px);
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 28px;
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 .extension-card:hover {
-  border-color: var(--border-color-glow);
-  box-shadow: 0 10px 30px -10px rgba(147, 51, 234, 0.2);
+  border-color: var(--border-color-hover);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
 }
 
 .card-header {
@@ -148,20 +143,21 @@ h1 {
 }
 
 .card-icon {
-  font-size: 1.5rem;
-  width: 44px;
-  height: 44px;
+  font-size: 1.3rem;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border-color);
 }
 
 .card-header h2 {
   font-size: 1.25rem;
   font-weight: 700;
+  color: #ffffff;
 }
 
 .card-subtitle {
@@ -180,7 +176,7 @@ code {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.88em;
-  color: #e2e8f0;
+  color: #e4e4e7;
 }
 
 /* Buttons */
@@ -195,20 +191,18 @@ code {
   font-size: 0.95rem;
   cursor: pointer;
   border: none;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
   font-family: var(--font-sans);
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--accent-purple) 0%, #7c3aed 100%);
-  color: #fff;
-  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  background: var(--accent-red);
+  color: #ffffff;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--accent-purple-light) 0%, #8b5cf6 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
+  background: var(--accent-red-hover);
+  transform: translateY(-1px);
 }
 
 .btn:disabled {
@@ -218,7 +212,7 @@ code {
 
 /* Result Box */
 .result-box {
-  background: rgba(10, 12, 20, 0.9);
+  background: #0d0d10;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   overflow: hidden;
@@ -244,16 +238,17 @@ code {
   background: transparent;
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
-  padding: 3px 10px;
+  padding: 4px 10px;
   border-radius: 6px;
   font-size: 0.75rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .btn-copy:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: #ffffff;
 }
 
 pre {
@@ -261,13 +256,13 @@ pre {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   overflow-x: auto;
-  color: #38bdf8;
+  color: #f4f4f5;
   max-height: 250px;
 }
 
 /* Tree Structure */
 .tree-structure {
-  background: rgba(10, 12, 20, 0.85);
+  background: #0d0d10;
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px 20px;
@@ -305,21 +300,27 @@ pre {
 }
 
 .step-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.step-card:hover {
+  border-color: var(--border-color-hover);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .step-number {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--accent-purple);
-  color: #fff;
+  background: var(--accent-red);
+  color: #ffffff;
   font-weight: 700;
   font-size: 0.85rem;
   display: flex;
@@ -330,6 +331,7 @@ pre {
 .step-card h3 {
   font-size: 1rem;
   font-weight: 600;
+  color: #ffffff;
 }
 
 .step-card p {
@@ -360,3 +362,4 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+

@@ -3,7 +3,7 @@
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: #090a10;
+  background: #09090b;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -13,7 +13,7 @@
 @keyframes extensionViewFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.98);
+    transform: scale(0.99);
   }
   to {
     opacity: 1;
@@ -24,8 +24,7 @@
 .extension-view-header {
   height: 52px;
   min-height: 52px;
-  background: rgba(15, 17, 26, 0.92);
-  backdrop-filter: blur(16px);
+  background: #111115;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
@@ -51,21 +50,21 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #d1d5db;
-  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e4e4e7;
+  padding: 6px 14px;
   border-radius: 8px;
   font-size: 0.82rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
 .extension-view-btn:hover {
   background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
   transform: translateY(-1px);
 }
 
@@ -74,15 +73,16 @@
 }
 
 .extension-view-btn.back-btn {
-  background: rgba(147, 51, 234, 0.18);
-  border-color: rgba(147, 51, 234, 0.35);
-  color: #e9d5ff;
+  background: rgba(220, 38, 38, 0.14);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
+  font-weight: 600;
 }
 
 .extension-view-btn.back-btn:hover {
-  background: rgba(147, 51, 234, 0.3);
-  border-color: rgba(147, 51, 234, 0.6);
-  color: #fff;
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
 }
 
 .extension-view-btn.close-btn {
@@ -91,9 +91,9 @@
 }
 
 .extension-view-btn.close-btn:hover {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.5);
-  color: #fca5a5;
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
 }
 
 .extension-view-badge {
@@ -109,13 +109,13 @@
 
 .extension-view-name {
   font-weight: 600;
-  color: #f3f4f6;
+  color: #ffffff;
 }
 
 .extension-view-ver {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #9ca3af;
+  color: #a1a1aa;
   background: rgba(255, 255, 255, 0.08);
   padding: 1px 6px;
   border-radius: 4px;
@@ -126,7 +126,7 @@
   position: relative;
   width: 100%;
   height: calc(100% - 52px);
-  background: #090a10;
+  background: #09090b;
 }
 
 .extension-view-iframe {
@@ -145,8 +145,8 @@
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: #090a10;
-  color: #9ca3af;
+  background: #09090b;
+  color: #a1a1aa;
   font-size: 0.95rem;
   z-index: 5;
 }
@@ -154,8 +154,8 @@
 .extension-spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid rgba(147, 51, 234, 0.2);
-  border-top-color: #a855f7;
+  border: 3px solid rgba(220, 38, 38, 0.2);
+  border-top-color: #dc2626;
   border-radius: 50%;
   animation: extSpinner 0.8s linear infinite;
 }

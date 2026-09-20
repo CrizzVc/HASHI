@@ -1,39 +1,39 @@
-# Extensión de Ejemplo para HASHI Launcher
+# Example Extension for HASHI Launcher
 
-Esta carpeta es una **plantilla de extensión externa** completamente autónoma para HASHI con **auto-arranque de backend**.
+This folder is a fully autonomous **external extension template** for HASHI with **automatic backend lifecycle management**.
 
-## 📁 Estructura del proyecto
+## 📁 Project Structure
 
 ```text
 example/
-├── manifest.json      # Configuración y metadatos (incluye "backendEntry")
-├── README.md          # Esta guía
-├── frontend/          # Vista web (HTML, CSS, JS)
-│   ├── index.html     # Estructura de la interfaz
-│   ├── style.css      # Estilos visuales
-│   └── app.js         # Lógica del cliente y peticiones al backend
-└── backend/           # Mini backend de la extensión
-    ├── package.json   # Metadatos del backend
-    └── server.js      # Servidor HTTP/API y servidor de archivos estáticos
+├── manifest.json      # Configuration and metadata (includes "backendEntry")
+├── README.md          # This guide
+├── frontend/          # Web UI (HTML, CSS, JS)
+│   ├── index.html     # HTML interface structure
+│   ├── style.css      # Visual styles and design tokens
+│   └── app.js         # Client logic and backend requests
+└── backend/           # Mini backend for the extension
+    ├── package.json   # Backend metadata
+    └── server.js      # HTTP/API server & static file server
 ```
 
-## 🚀 Cómo funciona el auto-arranque en HASHI
+## 🚀 How automatic backend startup works in HASHI
 
-1. **Auto-inicio transparente:**
-   Cuando HASHI detecta la propiedad `"backendEntry": "backend/server.js"` en el `manifest.json`, el launcher **inicia automáticamente el backend como un subproceso en segundo plano**.
-   * No requiere abrir la terminal.
-   * Al cerrar HASHI o desactivar la extensión en el catálogo, HASHI apaga el subproceso automáticamente.
+1. **Seamless auto-start:**
+   When HASHI detects `"backendEntry": "backend/server.js"` in `manifest.json`, the launcher **automatically starts the backend as a background subprocess**.
+   * No need to open a terminal manually.
+   * When closing HASHI or disabling the extension, HASHI terminates the subprocess cleanly.
 
-2. **Sin dependencias obligatorias:**
-   El archivo `backend/server.js` de ejemplo utiliza las librerías estándar integradas en Node.js (`http`, `fs`, `path`, `https`), por lo que funciona al instante en cualquier máquina sin necesidad de ejecutar `npm install`.
+2. **Zero required dependencies:**
+   The `backend/server.js` file uses native standard Node.js modules (`http`, `fs`, `path`, `https`), so it runs immediately on any machine without needing `npm install`.
 
-## ⚙️ Configuración (`manifest.json`)
+## ⚙️ Configuration (`manifest.json`)
 
 ```json
 {
   "id": "example",
-  "name": "Extensión de Ejemplo",
-  "description": "Plantilla de extensión externa con frontend (HTML/CSS/JS) y mini backend en Node.",
+  "name": "Example Extension",
+  "description": "External extension template with frontend (HTML/CSS/JS) and Express/Node mini backend.",
   "version": "1.0.0",
   "type": "external",
   "entryUrl": "http://localhost:3001",
@@ -42,3 +42,4 @@ example/
   "enabled": true
 }
 ```
+

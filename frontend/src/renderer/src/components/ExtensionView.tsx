@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { ChevronLeftIcon, ExtensionIcon, CloseIcon, GlobeIcon, UpdateIcon } from './Icons'
+import { ChevronLeftIcon, ExtensionIcon, CloseIcon, UpdateIcon } from './Icons'
 
 export interface LauncherExtension {
   id: string
@@ -29,12 +29,6 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({ extension, onClose }) => 
     setKey((prev) => prev + 1)
   }
 
-  const handleOpenExternal = () => {
-    if (extension.entryUrl) {
-      void window.api.openExternal(extension.entryUrl)
-    }
-  }
-
   useEffect(() => {
     void window.api.openExtensionSession(extension.id)
     return () => {
@@ -62,10 +56,10 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({ extension, onClose }) => 
           <button
             className="extension-view-btn back-btn"
             onClick={onClose}
-            title="Volver al menú principal (Esc)"
+            title="Back to main menu (Esc)"
           >
             <ChevronLeftIcon size={18} />
-            <span>Volver</span>
+            <span>Back</span>
           </button>
           <div className="extension-view-info">
             <div className="extension-view-badge">
@@ -80,25 +74,15 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({ extension, onClose }) => 
           <button
             className="extension-view-btn"
             onClick={handleReload}
-            title="Recargar vista"
+            title="Reload view"
           >
             <UpdateIcon size={16} />
-            <span>Recargar</span>
+            <span>Reload</span>
           </button>
-          {extension.entryUrl && (
-            <button
-              className="extension-view-btn"
-              onClick={handleOpenExternal}
-              title="Abrir en navegador externo"
-            >
-              <GlobeIcon size={16} />
-              <span>Navegador</span>
-            </button>
-          )}
           <button
             className="extension-view-btn close-btn"
             onClick={onClose}
-            title="Cerrar (Esc)"
+            title="Close (Esc)"
           >
             <CloseIcon size={18} />
           </button>
@@ -109,7 +93,7 @@ const ExtensionView: React.FC<ExtensionViewProps> = ({ extension, onClose }) => 
         {isLoading && (
           <div className="extension-view-loader">
             <div className="extension-spinner" />
-            <p>Cargando {extension.name}...</p>
+            <p>Loading {extension.name}...</p>
           </div>
         )}
         <iframe
