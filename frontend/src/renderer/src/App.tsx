@@ -4643,7 +4643,7 @@ function App(): React.JSX.Element {
           {achievementsView && detailGame && (
             <TrophiesView
               gameName={detailGame.name}
-              coverUrl={detailGame.squareGridImageUrl || detailGame.gridImageUrl || detailGame.iconDataUrl}
+              coverUrl={detailGame.gridImageUrl || detailGame.squareGridImageUrl || detailGame.iconDataUrl}
               logoUrl={detailGame.logoImageUrl}
               heroUrl={detailGame.heroImageUrl}
               steamAppId={detailGame.steamAppId}

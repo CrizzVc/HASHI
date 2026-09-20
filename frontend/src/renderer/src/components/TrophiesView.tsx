@@ -47,11 +47,12 @@ const TrophiesView: React.FC<TrophiesViewProps> = ({
     const progress = totalCount > 0 ? (unlockedCount / totalCount) * 100 : 0
 
     useEffect(() => {
-        cardRefs.current[selectedIndex]?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest',
-            inline: 'center'
-        })
+        const el = cardRefs.current[selectedIndex]
+        if (!el) return
+        const container = el.closest('.trophies-row') as HTMLElement | null
+        if (!container) return
+        const cardLeft = el.offsetLeft - container.offsetLeft
+        container.scrollTo({ left: cardLeft, behavior: 'smooth' })
     }, [selectedIndex])
 
     const handleOpenSteamAchievements = (): void => {
