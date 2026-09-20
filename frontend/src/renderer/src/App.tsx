@@ -796,6 +796,7 @@ function App(): React.JSX.Element {
   const [detailScreenshots, setDetailScreenshots] = useState<Array<{ path_full: string; path_thumbnail: string }>>([])
   const [detailLoadingShots, setDetailLoadingShots] = useState(false)
   const [detailShotIndex, setDetailShotIndex] = useState(0)
+  const [detailFocusIndex, setDetailFocusIndex] = useState(0)
   const [detailInfo, setDetailInfo] = useState<{
     description: string | null
     developer: string | null
@@ -830,6 +831,7 @@ function App(): React.JSX.Element {
   const previousHomeSelectedGameIdRef = useRef<string | null>(null)
   const detailFromLibraryRef = useRef(false)
   const lastNavTimeRef = useRef(0)
+  const detailBottomFocusRef = useRef(1)
 
   const visibleGames = useMemo(() => getRecentGames(games), [games])
   const sortedLibraryGames = useMemo(() => sortGamesByNewestFirst(games), [games])
@@ -1654,7 +1656,23 @@ function App(): React.JSX.Element {
 
         if (!cancelled && shotsRes.ok) {
           const shots = await shotsRes.json()
-          if (Array.isArray(shots)) setDetailScreenshots(shots)
+          if (Array.isArray(shots)) {
+            setDetailScreenshots(shots)
+            // If focus was at index 1 (Play when no shots), move to index 3 (Play with shots)
+            if (shots.length > 1) {
+              setDetailFocusIndex((prev) => {
+                if (prev === 1) {
+                  detailBottomFocusRef.current = 3
+                  return 3
+                }
+                if (prev === 2) {
+                  detailBottomFocusRef.current = 4
+                  return 4
+                }
+                return prev
+              })
+            }
+          }
         }
         if (!cancelled && detailsRes.ok) {
           const details = await detailsRes.json()
@@ -1674,6 +1692,12 @@ function App(): React.JSX.Element {
       cancelled = true
     }
   }, [detailGameId, language])
+
+  useEffect(() => {
+    if (!detailGameId) return
+    setDetailFocusIndex(1)
+    detailBottomFocusRef.current = 1
+  }, [detailGameId])
 
   // ── Close detail view with Escape (sonido close) ──
   useEffect(() => {
@@ -2980,7 +3004,7 @@ function App(): React.JSX.Element {
           setHomeCardMode('main')
         }
       } else {
-        // Si el detail está abierto, solo procesar Escape para cerrarlo
+        // Si el detail está abierto, navegar con flechas
         if (detailGameId) {
           if (e.key === 'Escape') {
             e.preventDefault()
@@ -2991,6 +3015,61 @@ function App(): React.JSX.Element {
               setLibraryView(true)
             } else {
               setDetailGameId(null)
+            }
+            return
+          }
+
+          const hasShots = detailScreenshots.length > 1
+          const playIdx = hasShots ? 3 : 1
+          const editIdx = hasShots ? 4 : 2
+          // Back
+          //   ↓
+          // ShotPrev ←→ ShotNext → Play ←→ Edit
+          const bottomRow = hasShots ? [1, 2, playIdx, editIdx] : [playIdx, editIdx]
+
+          const moveDetailFocus = (next: number): void => {
+            if (next === detailFocusIndex) return
+            playMove()
+            if (next !== 0) detailBottomFocusRef.current = next
+            setDetailFocusIndex(next)
+          }
+
+          if (e.key === 'ArrowRight') {
+            e.preventDefault()
+            const i = bottomRow.indexOf(detailFocusIndex)
+            if (i >= 0 && i < bottomRow.length - 1) moveDetailFocus(bottomRow[i + 1])
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault()
+            const i = bottomRow.indexOf(detailFocusIndex)
+            if (i > 0) moveDetailFocus(bottomRow[i - 1])
+          } else if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            if (detailFocusIndex === 0) {
+              const remembered = detailBottomFocusRef.current
+              moveDetailFocus(bottomRow.includes(remembered) ? remembered : playIdx)
+            }
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            if (bottomRow.includes(detailFocusIndex)) moveDetailFocus(0)
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            playEnter()
+            if (detailFocusIndex === 0) {
+              if (detailFromLibraryRef.current) {
+                detailFromLibraryRef.current = false
+                setDetailGameId(null)
+                setLibraryView(true)
+              } else {
+                setDetailGameId(null)
+              }
+            } else if (hasShots && detailFocusIndex === 1) {
+              handlePrevShot()
+            } else if (hasShots && detailFocusIndex === 2) {
+              handleNextShot()
+            } else if (detailFocusIndex === playIdx) {
+              if (detailGame) handleLaunchGame(detailGame.id)
+            } else if (detailFocusIndex === editIdx) {
+              if (detailGame?.id) openEditGameModal(detailGame.id)
             }
           }
           return
@@ -3040,7 +3119,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocusIndex, detailScreenshots.length, detailGame, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
@@ -3056,6 +3135,8 @@ function App(): React.JSX.Element {
 
   const openDetailView = useCallback((gameId: string) => {
     playEnter()
+    setDetailFocusIndex(1) // Play; remapped to 3 if screenshots appear
+    detailBottomFocusRef.current = 1
     if (gameId.startsWith('steam-')) {
       const appid = gameId.replace(/^steam-/, '')
       setSelectedSteamAppId(appid)
@@ -4081,11 +4162,8 @@ function App(): React.JSX.Element {
             className="detail-bg fade-in-bg"
             style={detailBgStyle}
           />
-          <button className="detail-back-button" onClick={handleCloseDetail}>
+          <button className={`detail-back-button detail-focusable${detailFocusIndex === 0 ? ' detail-focused' : ''}`} onClick={handleCloseDetail}>
             <ChevronLeftIcon size={18} /> {t.btnBack}
-          </button>
-          <button className="detail-close" onClick={handleCloseDetail}>
-            <CloseIcon size={20} />
           </button>
 
           <div className="detail-hero-section">
@@ -4143,14 +4221,14 @@ function App(): React.JSX.Element {
                   {detailScreenshots.length > 1 && (
                     <>
                       <button
-                        className="detail-carousel-nav prev"
+                        className={`detail-carousel-nav prev detail-focusable${detailFocusIndex === 1 ? ' detail-focused' : ''}`}
                         onClick={handlePrevShot}
                         aria-label={t.prevScreenshot}
                       >
                         <ChevronLeftIcon size={20} />
                       </button>
                       <button
-                        className="detail-carousel-nav next"
+                        className={`detail-carousel-nav next detail-focusable${detailFocusIndex === 2 ? ' detail-focused' : ''}`}
                         onClick={handleNextShot}
                         aria-label={t.nextScreenshot}
                       >
@@ -4392,9 +4470,11 @@ function App(): React.JSX.Element {
                   : null
                 const showProgress = isDownloading && activeDownload && activeDownload.percent > 0
 
+                const hasShots = detailScreenshots.length > 1
+                const playIdx = hasShots ? 3 : 1
                 return (
                   <button
-                    className={`btn-play btn-play-detail ${isRunning ? 'running' : ''} ${isDownloading ? 'downloading' : ''}`}
+                    className={`btn-play btn-play-detail detail-focusable${detailFocusIndex === playIdx ? ' detail-focused' : ''} ${isRunning ? 'running' : ''} ${isDownloading ? 'downloading' : ''}`}
                     onClick={() => handleLaunchGame(detailGame.id)}
                   >
                     {isRunning ? (
@@ -4431,16 +4511,21 @@ function App(): React.JSX.Element {
                   </button>
                 )
               })()}
-              <button
-                className="detail-edit-button"
-                onClick={() => {
-                  if (detailGame.id) openEditGameModal(detailGame.id)
-                  setContextMenu((p) => ({ ...p, visible: false }))
-                }}
-                aria-label={t.editGame}
-              >
-                <MoreIcon size={20} />
-              </button>
+              {(() => {
+                const editIdx = detailScreenshots.length > 1 ? 4 : 2
+                return (
+                  <button
+                    className={`detail-edit-button detail-focusable${detailFocusIndex === editIdx ? ' detail-focused' : ''}`}
+                    onClick={() => {
+                      if (detailGame.id) openEditGameModal(detailGame.id)
+                      setContextMenu((p) => ({ ...p, visible: false }))
+                    }}
+                    aria-label={t.editGame}
+                  >
+                    <MoreIcon size={20} />
+                  </button>
+                )
+              })()}
             </div>
 
           </div>
