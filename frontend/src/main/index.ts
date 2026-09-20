@@ -8,7 +8,7 @@ import * as fs from 'fs'
 import * as crypto from 'crypto'
 import { spawn, fork, execSync, type ChildProcess } from 'child_process'
 import * as http from 'http'
-import { URL } from 'url'
+import { URL, pathToFileURL } from 'url'
 import { translations } from '../renderer/src/translations'
 
 const STEAM_API_KEY = 'B1F361EA3C07B455DC8B0D06ED179B00'
@@ -91,7 +91,7 @@ function isSafeExtensionUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false
   try {
     const parsed = new URL(value)
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'file:'
   } catch {
     return false
   }
@@ -113,7 +113,7 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
           const version = typeof manifest.version === 'string' ? manifest.version : ''
           const rawType = typeof manifest.type === 'string' ? manifest.type : 'external'
           const type = (rawType === 'native' || rawType === 'embedded') ? rawType : 'external'
-          const entryUrl = manifest.entryUrl
+          const rawEntryUrl = typeof manifest.entryUrl === 'string' ? manifest.entryUrl.trim() : null
           const viewId = typeof manifest.viewId === 'string' ? manifest.viewId : null
           const backendEntry = typeof manifest.backendEntry === 'string'
             ? manifest.backendEntry
@@ -123,8 +123,20 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
           const sidebar = manifest.sidebar === true
           const enabled = typeof manifest.enabled === 'boolean' ? manifest.enabled : true
 
+          // Auto-detección de frontend local si no se especifica entryUrl o si es solo frontend
+          let entryUrl = rawEntryUrl
+          if (!entryUrl && type === 'external') {
+            const frontendIndex = join(extensionsDir, entry.name, 'frontend', 'index.html')
+            const rootIndex = join(extensionsDir, entry.name, 'index.html')
+            if (fs.existsSync(frontendIndex)) {
+              entryUrl = pathToFileURL(frontendIndex).href
+            } else if (fs.existsSync(rootIndex)) {
+              entryUrl = pathToFileURL(rootIndex).href
+            }
+          }
+
           const validEntry = type === 'external'
-            ? isSafeExtensionUrl(entryUrl)
+            ? (entryUrl !== null && isSafeExtensionUrl(entryUrl))
             : type === 'embedded'
               ? viewId !== null
               : false
@@ -135,7 +147,7 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
             description: description.slice(0, 240),
             version: version.slice(0, 32),
             type,
-            entryUrl: type === 'external' && typeof entryUrl === 'string' ? entryUrl : null,
+            entryUrl: type === 'external' ? entryUrl : null,
             viewId: type === 'embedded' ? viewId : null,
             backendEntry,
             dirPath: join(extensionsDir, entry.name),
@@ -200,6 +212,14 @@ function startExtensionBackend(extension: LauncherExtension): void {
   }
 }
 
+function startExtensionBackendById(extensionId: string): void {
+  const extensions = readExtensions()
+  const extension = extensions.find((e) => e.id === extensionId)
+  if (extension) {
+    startExtensionBackend(extension)
+  }
+}
+
 function stopExtensionBackend(extensionId: string): void {
   const child = runningExtensionProcesses.get(extensionId)
   if (child && !child.killed) {
@@ -215,17 +235,9 @@ function stopExtensionBackend(extensionId: string): void {
 
 function syncExtensionProcesses(): void {
   const extensions = readExtensions()
-  const activeIds = new Set<string>()
+  const activeIds = new Set(extensions.filter((e) => e.enabled && e.backendEntry).map((e) => e.id))
 
-  for (const ext of extensions) {
-    if (ext.enabled && ext.backendEntry) {
-      activeIds.add(ext.id)
-      startExtensionBackend(ext)
-    } else {
-      stopExtensionBackend(ext.id)
-    }
-  }
-
+  // Detener solo los procesos de extensiones que fueron deshabilitadas o eliminadas
   for (const [runningId] of runningExtensionProcesses) {
     if (!activeIds.has(runningId)) {
       stopExtensionBackend(runningId)
@@ -1583,6 +1595,14 @@ app.whenReady().then(() => {
     } catch (err: any) {
       return { success: false, error: err.message }
     }
+  })
+  ipcMain.handle('open-extension-session', async (_, id: string) => {
+    startExtensionBackendById(id)
+    return { success: true }
+  })
+  ipcMain.handle('close-extension-session', async (_, id: string) => {
+    stopExtensionBackend(id)
+    return { success: true }
   })
   ipcMain.handle('open-extensions-directory', async () => {
     try {

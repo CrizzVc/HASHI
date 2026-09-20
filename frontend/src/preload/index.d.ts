@@ -61,6 +61,8 @@ declare global {
         enabled: boolean
       }>>
       setExtensionEnabled: (id: string, enabled: boolean) => Promise<{ success: boolean; error?: string }>
+      openExtensionSession: (id: string) => Promise<{ success: boolean; error?: string }>
+      closeExtensionSession: (id: string) => Promise<{ success: boolean; error?: string }>
       openExtensionsDirectory: () => Promise<{ success: boolean; error?: string }>
       // Steam account APIs
       getSteamAccount: () => Promise<{
