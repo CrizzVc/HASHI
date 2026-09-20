@@ -3106,7 +3106,7 @@ function App(): React.JSX.Element {
               setAchievementsView(false)
             } else if (e.key === 'ArrowRight' && detailAchievements.length > 0) {
               e.preventDefault()
-              const now = Date.now()
+              const now = performance.now()
               if (now - lastNavTimeRef.current > 150) {
                 lastNavTimeRef.current = now
                 setAchievementListIndex((prev) => {
@@ -3117,7 +3117,7 @@ function App(): React.JSX.Element {
               }
             } else if (e.key === 'ArrowLeft' && detailAchievements.length > 0) {
               e.preventDefault()
-              const now = Date.now()
+              const now = performance.now()
               if (now - lastNavTimeRef.current > 150) {
                 lastNavTimeRef.current = now
                 setAchievementListIndex((prev) => {
