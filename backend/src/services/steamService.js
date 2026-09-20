@@ -490,3 +490,110 @@ export async function getSteamLibrary({ key, steamId }) {
     return [];
   }
 }
+
+/**
+ * Helper to build thumbnail url for Steam partner event
+ */
+const buildThumbnailUrl = (body) => {
+  if (!body) return undefined;
+  if (body.clanid && body.posterid && body.posterid !== '0' && body.clanid !== '0') {
+    return `https://clan.akamai.steamstatic.com/images//steamcommunity/public/images/clans/${body.clanid}/${body.posterid}.jpg`;
+  }
+  if (body.poster_images && body.poster_images.length > 0 && body.poster_images[0]?.url) {
+    return body.poster_images[0].url;
+  }
+  if (body.body) {
+    const bbClanMatch = body.body.match(/\[img\]\{STEAM_CLAN_IMAGE\}\/([^\[\]]+)\[\/img\]/i);
+    if (bbClanMatch) {
+      return `https://clan.akamai.steamstatic.com/images/${bbClanMatch[1].trim()}`;
+    }
+    const clanImgMatch = body.body.match(/\{STEAM_CLAN_IMAGE\}\/([^\s"'\[\]]+)/);
+    if (clanImgMatch) {
+      return `https://clan.akamai.steamstatic.com/images/${clanImgMatch[1]}`;
+    }
+    const bbMatch = body.body.match(/\[img[^\]]*\](https?:\/\/[^\[]+)\[\/img\]/i);
+    if (bbMatch) return bbMatch[1].trim();
+    const urlMatch = body.body.match(/(https?:\/\/[^\s"'\[\]]+\.(?:jpg|jpeg|png|gif|webp))/i);
+    if (urlMatch) return urlMatch[1];
+  }
+  return undefined;
+};
+
+const extractImageFromContents = (contents) => {
+  const bbCodeMatch = contents?.match(/\[img\](.*?)\[\/img\]/i);
+  if (bbCodeMatch) {
+    return bbCodeMatch[1].replace(/\{STEAM_CLAN_IMAGE\}/g, 'https://clan.akamai.steamstatic.com/images');
+  }
+  const htmlImgMatch = contents?.match(/<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+  if (htmlImgMatch) return htmlImgMatch[1];
+  const clanMatch = contents?.match(/\{STEAM_CLAN_IMAGE\}\/([^\s"'<>\]\[]+)/);
+  if (clanMatch) return `https://clan.akamai.steamstatic.com/images/${clanMatch[1]}`;
+  const imgMatch = contents?.match(/(https?:\/\/[^\s"'<>\]\[]+\.(?:jpg|jpeg|png|gif))/i);
+  if (imgMatch) return imgMatch[1];
+  return undefined;
+};
+
+export async function getSteamNews(appid, { count = 10, lang = 'es' } = {}) {
+  const cacheKey = `news:${appid}:${count}:${lang}`;
+  const cached = getCached(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const eventUrl = `https://store.steampowered.com/events/ajaxgetadjacentpartnerevents/?appid=${appid}&count_before=0&count_after=${count}&lang_list=0`;
+    const eventRes = await fetch(eventUrl);
+    if (eventRes.ok) {
+      const data = await eventRes.json();
+      const events = data?.events ?? [];
+      if (events.length > 0) {
+        const mapped = events
+          .map((ev) => {
+            const body = ev.announcement_body;
+            const title = (ev.title && ev.title.trim() !== '') ? ev.title : (body?.headline?.trim() ?? '');
+            if (!title) return null;
+            return {
+              gid: ev.gid,
+              title,
+              url: `https://store.steampowered.com/news/app/${appid}/view/${ev.gid}`,
+              is_external_url: false,
+              author: '',
+              contents: body?.body ?? '',
+              feedlabel: 'steam_community_announcements',
+              date: body?.posttime ?? 0,
+              feedname: 'steam_community_announcements',
+              feed_type: 1,
+              appid: Number(appid),
+              image_url: buildThumbnailUrl(body)
+            };
+          })
+          .filter(Boolean);
+
+        if (mapped.length > 0) {
+          setCache(cacheKey, mapped);
+          return mapped;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[SteamService] Error obteniendo partner events:', err.message);
+  }
+
+  try {
+    const newsUrl = `https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=${appid}&count=${count}&maxlength=5000&format=json`;
+    const newsRes = await fetch(newsUrl);
+    if (newsRes.ok) {
+      const data = await newsRes.json();
+      const items = data?.appnews?.newsitems || [];
+      const mapped = items.map((item) => ({
+        ...item,
+        appid: Number(appid),
+        image_url: extractImageFromContents(item.contents ?? '')
+      }));
+      setCache(cacheKey, mapped);
+      return mapped;
+    }
+  } catch (err) {
+    console.error('[SteamService] Error obteniendo noticias (fallback):', err.message);
+  }
+
+  return [];
+}

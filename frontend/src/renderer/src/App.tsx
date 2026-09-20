@@ -3110,33 +3110,6 @@ function App(): React.JSX.Element {
           }
 
           if (achievementsView) {
-            if (e.key === 'Escape') {
-              e.preventDefault()
-              playClose()
-              setAchievementsView(false)
-            } else if (e.key === 'ArrowRight' && detailAchievements.length > 0) {
-              e.preventDefault()
-              const now = performance.now()
-              if (now - lastNavTimeRef.current > 150) {
-                lastNavTimeRef.current = now
-                setAchievementListIndex((prev) => {
-                  const next = Math.min(prev + 1, detailAchievements.length - 1)
-                  if (next !== prev) playMove()
-                  return next
-                })
-              }
-            } else if (e.key === 'ArrowLeft' && detailAchievements.length > 0) {
-              e.preventDefault()
-              const now = performance.now()
-              if (now - lastNavTimeRef.current > 150) {
-                lastNavTimeRef.current = now
-                setAchievementListIndex((prev) => {
-                  const next = Math.max(prev - 1, 0)
-                  if (next !== prev) playMove()
-                  return next
-                })
-              }
-            }
             return
           }
 

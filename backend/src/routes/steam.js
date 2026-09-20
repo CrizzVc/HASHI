@@ -7,10 +7,28 @@ import {
   getSteamProfileBackground,
   getSteamLibrary,
   getSteamAchievements,
+  getSteamNews,
   resolveSteamId
 } from '../services/steamService.js';
 
 const router = Router();
+
+// Get latest news for a Steam AppID
+router.get('/news/:appid', async (req, res) => {
+  try {
+    const { appid } = req.params;
+    const count = Number(req.query.count) || 10;
+    const lang = req.query.lang || 'es';
+    if (!appid) {
+      return res.status(400).json({ error: 'Se requiere el appid' });
+    }
+    const news = await getSteamNews(appid, { count, lang });
+    res.json({ appid, news });
+  } catch (error) {
+    console.error('[Steam] Error obteniendo noticias:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Resolve a game name to a Steam AppID
 router.get('/resolve', async (req, res) => {
