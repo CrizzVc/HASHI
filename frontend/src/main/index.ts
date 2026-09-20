@@ -51,9 +51,9 @@ interface LauncherExtension {
   name: string
   description: string
   version: string
-  type: 'external' | 'native'
+  type: 'external' | 'native' | 'embedded'
   entryUrl: string | null
-  nativeView: 'multimedia' | null
+  viewId: string | null
   sidebar: boolean
   enabled: boolean
 }
@@ -88,7 +88,8 @@ function readExtensionsState(): Record<string, boolean> {
 function isSafeExtensionUrl(value: unknown): value is string {
   if (typeof value !== 'string') return false
   try {
-    return new URL(value).protocol === 'https:'
+    const parsed = new URL(value)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
   } catch {
     return false
   }
@@ -108,12 +109,18 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
           const name = typeof manifest.name === 'string' ? manifest.name : ''
           const description = typeof manifest.description === 'string' ? manifest.description : ''
           const version = typeof manifest.version === 'string' ? manifest.version : ''
-          const type = manifest.type === 'native' ? 'native' : 'external'
+          const rawType = typeof manifest.type === 'string' ? manifest.type : 'external'
+          const type = (rawType === 'native' || rawType === 'embedded') ? rawType : 'external'
           const entryUrl = manifest.entryUrl
-          const nativeView = manifest.nativeView === 'multimedia' ? 'multimedia' : null
+          const viewId = typeof manifest.viewId === 'string' ? manifest.viewId : null
           const sidebar = manifest.sidebar === true
+          const enabled = typeof manifest.enabled === 'boolean' ? manifest.enabled : true
 
-          const validEntry = type === 'external' ? isSafeExtensionUrl(entryUrl) : nativeView !== null
+          const validEntry = type === 'external'
+            ? isSafeExtensionUrl(entryUrl)
+            : type === 'embedded'
+              ? viewId !== null
+              : false
           if (!/^[a-z0-9][a-z0-9-]{1,63}$/i.test(id) || !name || !version || !validEntry) return []
           return [{
             id,
@@ -122,9 +129,9 @@ function readExtensionsFrom(extensionsDir: string): LauncherExtension[] {
             version: version.slice(0, 32),
             type,
             entryUrl: type === 'external' && typeof entryUrl === 'string' ? entryUrl : null,
-            nativeView,
+            viewId: type === 'embedded' ? viewId : null,
             sidebar,
-            enabled: true
+            enabled
           }]
         } catch {
           return []

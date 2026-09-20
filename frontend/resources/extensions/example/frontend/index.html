@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Extensión de Ejemplo - HASHI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header class="extension-header">
+      <div class="badge-row">
+        <span class="badge">HASHI Extension Template</span>
+        <div id="backendStatus" class="status-indicator offline">
+          <span class="status-dot"></span>
+          <span class="status-text">Backend: Conectando...</span>
+        </div>
+      </div>
+      <h1>Mi Primera Extensión</h1>
+      <p class="subtitle">
+        Plantilla oficial de extensión externa. Utiliza esta carpeta como base independiente
+        para construir tus propias extensiones con frontend web y mini backend Express.
+      </p>
+    </header>
+
+    <main class="extension-grid">
+      <!-- Card 1: API Updates & Testing -->
+      <section class="extension-card">
+        <div class="card-header">
+          <div class="card-icon">⚡</div>
+          <div>
+            <h2>API de Actualizaciones</h2>
+            <p class="card-subtitle">Consulta de endpoints a través del mini backend</p>
+          </div>
+        </div>
+        <p class="card-desc">
+          Este botón realiza una petición a <code>GET /api/updates</code> en el mini backend de la extensión (Express),
+          el cual se comunica con la API de HASHI.
+        </p>
+        <button id="btnCheckUpdates" class="btn btn-primary">
+          <span class="btn-icon">🔍</span>
+          <span class="btn-label">Buscar actualizaciones</span>
+        </button>
+
+        <div id="resultContainer" class="result-box hidden">
+          <div class="result-header">
+            <span class="result-title">Respuesta del servidor</span>
+            <button id="btnCopyJson" class="btn-copy">Copiar JSON</button>
+          </div>
+          <pre id="jsonOutput"><code></code></pre>
+        </div>
+      </section>
+
+      <!-- Card 2: Arquitectura y estructura de archivos -->
+      <section class="extension-card">
+        <div class="card-header">
+          <div class="card-icon">📁</div>
+          <div>
+            <h2>Estructura de la Extensión</h2>
+            <p class="card-subtitle">Organización autónoma en una sola carpeta</p>
+          </div>
+        </div>
+        <div class="tree-structure">
+          <div class="tree-item"><span class="tree-icon">📂</span> <strong>example/</strong> <span class="tree-comment">(raíz de la extensión)</span></div>
+          <div class="tree-item indent-1"><span class="tree-icon">📄</span> <strong>manifest.json</strong> <span class="tree-comment">(metadatos y configuración)</span></div>
+          <div class="tree-item indent-1"><span class="tree-icon">📂</span> <strong>frontend/</strong> <span class="tree-comment">(interfaz web)</span></div>
+          <div class="tree-item indent-2"><span class="tree-icon">📄</span> index.html <span class="tree-comment">(vista principal)</span></div>
+          <div class="tree-item indent-2"><span class="tree-icon">🎨</span> style.css <span class="tree-comment">(estilos)</span></div>
+          <div class="tree-item indent-2"><span class="tree-icon">⚡</span> app.js <span class="tree-comment">(lógica cliente)</span></div>
+          <div class="tree-item indent-1"><span class="tree-icon">📂</span> <strong>backend/</strong> <span class="tree-comment">(servidor Express)</span></div>
+          <div class="tree-item indent-2"><span class="tree-icon">📦</span> package.json</div>
+          <div class="tree-item indent-2"><span class="tree-icon">🚀</span> server.js <span class="tree-comment">(endpoints y servidor estático)</span></div>
+        </div>
+      </section>
+
+      <!-- Card 3: Guía para desarrolladores -->
+      <section class="extension-card full-width">
+        <div class="card-header">
+          <div class="card-icon">🛠️</div>
+          <div>
+            <h2>¿Cómo crear tu propia extensión?</h2>
+            <p class="card-subtitle">Pasos para registrar y ejecutar una extensión en HASHI</p>
+          </div>
+        </div>
+        <div class="steps-grid">
+          <div class="step-card">
+            <div class="step-number">1</div>
+            <h3>Crea tu carpeta</h3>
+            <p>Copia esta carpeta en <code>%APPDATA%/hashi/extensions/tu-extension</code> o utilízala desde el directorio de extensiones.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">2</div>
+            <h3>Edita el manifest.json</h3>
+            <p>Configura el <code>id</code>, <code>name</code>, <code>entryUrl</code> (por ejemplo <code>http://localhost:3001</code>) y activa <code>sidebar: true</code>.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">3</div>
+            <h3>Inicia el backend</h3>
+            <p>En la carpeta <code>backend/</code>, ejecuta <code>npm install</code> y luego <code>npm start</code> para iniciar el servidor Express.</p>
+          </div>
+          <div class="step-card">
+            <div class="step-number">4</div>
+            <h3>Ábrela en HASHI</h3>
+            <p>Abre el modal de <strong>Extensiones</strong> en HASHI, pulsa <strong>Recargar</strong> y verás tu extensión lista para usarse.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="extension-footer">
+      <p>HASHI Launcher Extension Ecosystem • Plantilla lista para producción</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

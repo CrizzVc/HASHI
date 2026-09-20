@@ -1,9 +1,0 @@
-{
-  "id": "animeav1",
-  "name": "AnimeAV1",
-  "description": "Últimos episodios de AnimeAV1 en la vista Multimedia.",
-  "version": "1.0.0",
-  "type": "native",
-  "nativeView": "multimedia",
-  "sidebar": false
-}

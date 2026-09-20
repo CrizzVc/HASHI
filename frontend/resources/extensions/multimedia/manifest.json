@@ -1,9 +1,0 @@
-{
-  "id": "multimedia",
-  "name": "Multimedia",
-  "description": "Vista nativa para descubrir películas y series en HASHI.",
-  "version": "1.0.0",
-  "type": "native",
-  "nativeView": "multimedia",
-  "sidebar": true
-}

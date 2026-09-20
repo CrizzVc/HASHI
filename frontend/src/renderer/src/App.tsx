@@ -139,9 +139,9 @@ interface LauncherExtension {
   name: string
   description: string
   version: string
-  type: 'external' | 'native'
+  type: 'external' | 'native' | 'embedded'
   entryUrl: string | null
-  nativeView: 'multimedia' | null
+  viewId: string | null
   sidebar: boolean
   enabled: boolean
 }
@@ -460,19 +460,6 @@ function MoreIcon({ size = 20 }: { size?: number }): React.JSX.Element {
   )
 }
 
-function TrophyIcon({ size = 22 }: { size?: number }): React.JSX.Element {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 4h8v3a4 4 0 0 1-8 0V4z" />
-      <path d="M8 6H5.5A2.5 2.5 0 0 0 8 8.5" />
-      <path d="M16 6h2.5A2.5 2.5 0 0 1 16 8.5" />
-      <path d="M12 11v3" />
-      <path d="M9 20h6" />
-      <path d="M10 17h4v3h-4z" />
-    </svg>
-  )
-}
-
 const RATING_IMAGES: Record<string, string> = {
   E: RatingE,
   E10: RatingE10,
@@ -512,6 +499,7 @@ function App(): React.JSX.Element {
   const [clock, setClock] = useState('')
   const [modal, setModal] = useState<ModalType>(null)
   const [nativeView, setNativeView] = useState<'multimedia' | null>(null)
+  const [activeEmbeddedView, setActiveEmbeddedView] = useState<string | null>(null)
   const [multimediaExtensionId, setMultimediaExtensionId] = useState<string | null>(null)
   const [animeAV1Latest, setAnimeAV1Latest] = useState<MultimediaCard[]>([])
   const [mediaDetail, setMediaDetail] = useState<MediaItem | null>(null)
@@ -590,14 +578,13 @@ function App(): React.JSX.Element {
   }, [])
 
   const openExtension = useCallback((extension: LauncherExtension): void => {
-    if (extension.type === 'native' && extension.nativeView) {
-      const defaultSource = extensions.find((item) => item.id === 'animeav1' && item.enabled)
-      setMultimediaExtensionId(extension.id === 'multimedia' && defaultSource ? defaultSource.id : extension.id)
-      setNativeView(extension.nativeView)
+    if (extension.type === 'embedded' && extension.viewId) {
+      setNativeView(null)
+      setActiveEmbeddedView(extension.viewId)
       return
     }
     if (extension.entryUrl) void window.api.openExternal(extension.entryUrl)
-  }, [extensions])
+  }, [])
 
   useEffect(() => {
     void loadExtensions()
@@ -745,13 +732,13 @@ function App(): React.JSX.Element {
   // Evita que el resto de vistas (fondo, hero del launcher, etc.) se muevan
   // mientras la vista multimedia está abierta encima
   useEffect(() => {
-    if (!nativeView) return
+    if (!nativeView && !activeEmbeddedView) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.body.style.overflow = previousOverflow
     }
-  }, [nativeView])
+  }, [nativeView, activeEmbeddedView])
 
   const heroItem = heroSlides[activeSlide];
   const multimediaCards = multimediaExtensionId === 'animeav1' && animeAV1Latest.length > 0
@@ -760,7 +747,7 @@ function App(): React.JSX.Element {
   const multimediaSources = useMemo(() => [
     { id: 'multimedia', name: 'Multimedia' },
     ...extensions
-      .filter((extension) => extension.nativeView === 'multimedia' && extension.id !== 'multimedia' && !extension.sidebar && extension.enabled)
+      .filter((extension) => extension.viewId === 'multimedia' && extension.id !== 'multimedia' && !extension.sidebar && extension.enabled)
       .map((extension) => ({ id: extension.id, name: extension.name }))
   ], [extensions])
 
@@ -2882,6 +2869,15 @@ function App(): React.JSX.Element {
         return
       }
 
+      if (activeEmbeddedView && !sidebarOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          playEnter()
+          setSidebarOpen(true)
+        }
+        return
+      }
+
       if (nativeView && !sidebarOpen) {
         if (e.key === 'Escape') {
           e.preventDefault()
@@ -2931,7 +2927,7 @@ function App(): React.JSX.Element {
         } else if (e.key === 'Enter') {
           e.preventDefault()
           playEnter()
-          if (sidebarIndex === 0) { setNativeView(null); playHome() }
+          if (sidebarIndex === 0) { setNativeView(null); setActiveEmbeddedView(null); playHome() }
           else if (sidebarIndex === 1) openAddGameModal()
           else if (sidebarIndex === 2) handleOpenStore(defaultStore)
           else if (sidebarIndex === 3) handleOpenSpecs()
@@ -3233,7 +3229,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, nativeView, activeEmbeddedView, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
@@ -3553,7 +3549,7 @@ function App(): React.JSX.Element {
             HASHI
           </h1>
         </div>
-        <button className={`sidebar-item ${sidebarIndex === 0 ? 'focused' : ''}`} onClick={() => { setNativeView(null); playHome(); setSidebarOpen(false); }}>
+        <button className={`sidebar-item ${sidebarIndex === 0 ? 'focused' : ''}`} onClick={() => { setNativeView(null); setActiveEmbeddedView(null); playHome(); setSidebarOpen(false); }}>
           <div className="sidebar-item-icon"><HomeIcon size={18} /></div> {t.home}
         </button>
         <button className={`sidebar-item ${sidebarIndex === 1 ? 'focused' : ''}`} onClick={() => { openAddGameModal(); setSidebarOpen(false); }}>
@@ -3655,6 +3651,7 @@ function App(): React.JSX.Element {
           onEpisodeClick={(item) => setMediaDetail(item)}
         />
       )}
+
       {mediaDetail && <MediaDetailView item={mediaDetail} onClose={() => setMediaDetail(null)} />}
 
       {/* ── Hero section ── */}

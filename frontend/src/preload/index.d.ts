@@ -53,9 +53,9 @@ declare global {
         name: string
         description: string
         version: string
-        type: 'external' | 'native'
+        type: 'external' | 'native' | 'embedded'
         entryUrl: string | null
-        nativeView: 'multimedia' | null
+        viewId: string | null
         sidebar: boolean
         enabled: boolean
       }>>
