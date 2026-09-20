@@ -3106,18 +3106,26 @@ function App(): React.JSX.Element {
               setAchievementsView(false)
             } else if (e.key === 'ArrowRight' && detailAchievements.length > 0) {
               e.preventDefault()
-              setAchievementListIndex((prev) => {
-                const next = Math.min(prev + 1, detailAchievements.length - 1)
-                if (next !== prev) playMove()
-                return next
-              })
+              const now = Date.now()
+              if (now - lastNavTimeRef.current > 150) {
+                lastNavTimeRef.current = now
+                setAchievementListIndex((prev) => {
+                  const next = Math.min(prev + 1, detailAchievements.length - 1)
+                  if (next !== prev) playMove()
+                  return next
+                })
+              }
             } else if (e.key === 'ArrowLeft' && detailAchievements.length > 0) {
               e.preventDefault()
-              setAchievementListIndex((prev) => {
-                const next = Math.max(prev - 1, 0)
-                if (next !== prev) playMove()
-                return next
-              })
+              const now = Date.now()
+              if (now - lastNavTimeRef.current > 150) {
+                lastNavTimeRef.current = now
+                setAchievementListIndex((prev) => {
+                  const next = Math.max(prev - 1, 0)
+                  if (next !== prev) playMove()
+                  return next
+                })
+              }
             }
             return
           }
@@ -4282,7 +4290,7 @@ function App(): React.JSX.Element {
                 )}
               </div>
 
-              {detailGame && (detailGame as any).steamAppId && (
+              {detailGame && (
                 <div
                   className={`detail-achievements-card detail-focusable${detailFocus === 'achievements' ? ' detail-focused' : ''}`}
                   onClick={() => { setAchievementListIndex(0); setAchievementsView(true) }}

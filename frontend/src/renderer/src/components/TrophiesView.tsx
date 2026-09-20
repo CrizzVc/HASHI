@@ -52,7 +52,19 @@ const TrophiesView: React.FC<TrophiesViewProps> = ({
         const container = el.closest('.trophies-row') as HTMLElement | null
         if (!container) return
         const cardLeft = el.offsetLeft - container.offsetLeft
-        container.scrollTo({ left: cardLeft, behavior: 'smooth' })
+        const start = container.scrollLeft
+        const distance = cardLeft - start
+        if (distance === 0) return
+        const duration = 400
+        let startTime: number | null = null
+        const step = (timestamp: number) => {
+            if (!startTime) startTime = timestamp
+            const progress = Math.min((timestamp - startTime) / duration, 1)
+            const ease = 1 - Math.pow(1 - progress, 3)
+            container.scrollLeft = start + distance * ease
+            if (progress < 1) requestAnimationFrame(step)
+        }
+        requestAnimationFrame(step)
     }, [selectedIndex])
 
     const handleOpenSteamAchievements = (): void => {
