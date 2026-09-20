@@ -52,7 +52,7 @@ import RatingE10 from './assets/ratings/E10.png'
 import RatingT from './assets/ratings/T.png'
 import RatingM from './assets/ratings/M.png'
 
-const APP_VERSION = '1.0.0'
+const DEFAULT_APP_VERSION = '1.0.1'
 
 function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number)
@@ -609,6 +609,7 @@ function App(): React.JSX.Element {
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
   const [updateLink, setUpdateLink] = useState<string | null>(null)
   const [updateNotification, setUpdateNotification] = useState<UpdateNotificationData | null>(null)
+  const [appVersion, setAppVersion] = useState<string>(DEFAULT_APP_VERSION)
   const [settingsWallpaperPage, setSettingsWallpaperPage] = useState(0)
   const [, setLogoClicks] = useState(0)
   const [logoIsRed, setLogoIsRed] = useState(false)
@@ -620,15 +621,26 @@ function App(): React.JSX.Element {
     try { return localStorage.getItem(OMNICONSOLE_STORAGE_KEY) === 'true' } catch { return false }
   })
 
+  // Obtener la versión dinámica de la app
+  useEffect(() => {
+    window.api?.getAppVersion?.().then((ver) => {
+      if (ver) setAppVersion(ver)
+    }).catch(() => {})
+  }, [])
+
   // ── Comprobación automática de versión al iniciar ──
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null
     const checkVersionOnStartup = async (): Promise<void> => {
       try {
         if (!window.api?.checkForUpdates) return
-        const data = await window.api.checkForUpdates()
+        const [data, localVer] = await Promise.all([
+          window.api.checkForUpdates(),
+          window.api.getAppVersion ? window.api.getAppVersion() : Promise.resolve(appVersion)
+        ])
+        const currentVer = localVer || appVersion || DEFAULT_APP_VERSION
         if (data?.version) {
-          const cmp = compareVersions(data.version, APP_VERSION)
+          const cmp = compareVersions(data.version, currentVer)
           if (cmp > 0) {
             setUpdateMessage(`Nueva versión encontrada: v${data.version}`)
             if (data.link) setUpdateLink(data.link)
@@ -651,7 +663,7 @@ function App(): React.JSX.Element {
     return () => {
       if (timer) clearTimeout(timer)
     }
-  }, [])
+  }, [appVersion])
 
   // Sync omniconsole setting to main process on mount and when changed
   useEffect(() => {
@@ -2318,7 +2330,9 @@ function App(): React.JSX.Element {
       const data = await window.api.checkForUpdates()
       const apiVersion = data.version
       const downloadLink = data.link
-      const cmp = compareVersions(apiVersion, APP_VERSION)
+      const localVer = window.api.getAppVersion ? await window.api.getAppVersion() : appVersion
+      const currentVer = localVer || appVersion || DEFAULT_APP_VERSION
+      const cmp = compareVersions(apiVersion, currentVer)
       if (cmp > 0) {
         setUpdateMessage(`Nueva versión encontrada: v${apiVersion}`)
         setUpdateLink(downloadLink)
@@ -2332,7 +2346,7 @@ function App(): React.JSX.Element {
     } finally {
       setIsCheckingUpdate(false)
     }
-  }, [])
+  }, [appVersion])
 
   const handleOpenWallpaperFolderPicker = useCallback(async () => {
     try {
@@ -5507,7 +5521,7 @@ function App(): React.JSX.Element {
                     <div className="settings-app-meta">
                       <div className="settings-app-title-row">
                         <span className="settings-app-name">HASHI</span>
-                        <span className="settings-version-badge">v{APP_VERSION}</span>
+                        <span className="settings-version-badge">v{appVersion}</span>
                       </div>
                       <div className="settings-app-stats-grid">
                         <div className="settings-stat-box">
@@ -5845,7 +5859,7 @@ function App(): React.JSX.Element {
                       >
                         <div className="settings-helper-card-header">
                           <span className="settings-helper-badge">Tutorial</span>
-                          <span className="settings-helper-tag">HASHI v{APP_VERSION}</span>
+                          <span className="settings-helper-tag">HASHI v{appVersion}</span>
                         </div>
                         <div className="settings-helper-card-body">
                           <h4 className="settings-helper-title">{t.welcomeTutorial}</h4>

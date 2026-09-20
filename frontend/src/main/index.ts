@@ -1938,6 +1938,10 @@ app.whenReady().then(() => {
     clearInterval(downloadParseInterval)
   })
 
+  ipcMain.handle('get-app-version', () => {
+    return app.getVersion()
+  })
+
   ipcMain.handle('check-for-updates', async () => {
     const https = await import('https')
     return new Promise((resolve, reject) => {
