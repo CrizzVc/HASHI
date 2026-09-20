@@ -130,9 +130,14 @@ router.get('/achievements', async (req, res) => {
       return res.status(400).json({ error: 'Se requiere el appid del juego' });
     }
 
+    console.log(`[Steam] Achievements request: appid=${appid}, steamId=${steamId || 'none'}, lang=${lang}`);
+
     let resolvedSteamId = null;
     if (steamId && typeof steamId === 'string' && steamId.trim()) {
       resolvedSteamId = await resolveSteamId(key.trim(), steamId.trim());
+      console.log(`[Steam] Resolved steamId: ${steamId} -> ${resolvedSteamId}`);
+    } else {
+      console.log(`[Steam] No steamId provided, skipping player achievements`);
     }
 
     const achievements = await getSteamAchievements({
@@ -142,6 +147,7 @@ router.get('/achievements', async (req, res) => {
       lang: typeof lang === 'string' ? lang : 'en'
     });
 
+    console.log(`[Steam] Achievements result: ${achievements.length} total, ${achievements.filter(a => a.achieved).length} unlocked`);
     res.json({ appid: appid.trim(), achievements });
   } catch (error) {
     console.error('[Steam] Error obteniendo logros:', error.message);

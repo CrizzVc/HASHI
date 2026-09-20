@@ -1390,6 +1390,7 @@ function App(): React.JSX.Element {
     const loadSteamAccount = async (): Promise<void> => {
       try {
         const account = await window.api.getSteamAccount()
+        console.log(`[App] Loaded Steam account: linked=${account?.linked}, steamId=${account?.steamId}, steamId64=${account?.steamId64}, accountName=${account?.accountName}`)
         setSteamAccount({
           linked: !!account?.linked,
           apiKey: account?.apiKey || DEFAULT_STEAM_API_KEY,
@@ -1704,6 +1705,7 @@ function App(): React.JSX.Element {
         if (!cancelled && canFetchAchievements) {
           try {
             const steamIdParam = steamAccount.steamId64 || steamAccount.steamId || ''
+            console.log(`[App] Fetching achievements: appid=${appid}, steamId=${steamIdParam}, apiKey=${steamAccount.apiKey ? '***' : 'missing'}`)
             const achParams = new URLSearchParams({
               key: steamAccount.apiKey,
               appid: String(appid),
@@ -1716,6 +1718,7 @@ function App(): React.JSX.Element {
             if (!cancelled && achRes.ok) {
               const achData = await achRes.json()
               const achList = achData?.achievements
+              console.log(`[App] Achievements response: ${achList?.length || 0} total, ${achList?.filter((a: any) => a.achieved)?.length || 0} unlocked`)
               if (Array.isArray(achList)) {
                 setDetailAchievements(
                   achList.map((a: any) => ({

@@ -382,11 +382,14 @@ export async function getSteamAchievements({ key, steamId, appid, lang }) {
 
     let playerMap = {};
     if (steamId) {
+      console.log(`[SteamService] Fetching player achievements for steamId=${steamId}, appid=${appid}`);
       try {
-        const playerUrl = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v2/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}&l=${encodeURIComponent(steamLang)}`;
+        const playerUrl = `https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?key=${encodeURIComponent(key)}&steamid=${encodeURIComponent(steamId)}&appid=${encodeURIComponent(appid)}&l=${encodeURIComponent(steamLang)}`;
         const playerRes = await fetch(playerUrl);
+        console.log(`[SteamService] Player achievements response status: ${playerRes.status}`);
         if (playerRes.ok) {
           const playerJson = await playerRes.json();
+          console.log(`[SteamService] Player achievements success: ${playerJson?.playerstats?.success}, count: ${playerJson?.playerstats?.achievements?.length}`);
           const achievements = playerJson?.playerstats?.achievements;
           if (playerJson?.playerstats?.success && Array.isArray(achievements)) {
             for (const a of achievements) {
@@ -398,8 +401,15 @@ export async function getSteamAchievements({ key, steamId, appid, lang }) {
               }
             }
           }
+        } else {
+          const errorText = await playerRes.text().catch(() => 'could not read body');
+          console.log(`[SteamService] Player achievements error response: ${errorText.substring(0, 200)}`);
         }
-      } catch {}
+      } catch (err) {
+        console.error(`[SteamService] Error fetching player achievements:`, err.message);
+      }
+    } else {
+      console.log(`[SteamService] No steamId provided, skipping player achievements`);
     }
 
     if (totalFromSchema === 0 && Object.keys(playerMap).length === 0) {
