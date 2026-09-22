@@ -638,6 +638,21 @@ function App(): React.JSX.Element {
   const [showBootPlayer, setShowBootPlayer] = useState(false)
   const [bootPlayerVideoPath, setBootPlayerVideoPath] = useState<string | null>(null)
   const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
+  const [replayHomeEntrance, setReplayHomeEntrance] = useState(false)
+
+  // Re-trigger homeEntrance animations after boot video finishes
+  useEffect(() => {
+    if (!replayHomeEntrance) return
+    // Double-rAF ensures the browser has painted with animation:none before re-enabling
+    const raf1 = requestAnimationFrame(() => {
+      const raf2 = requestAnimationFrame(() => {
+        setReplayHomeEntrance(false)
+      })
+      rafRef2.current = raf2
+    })
+    let rafRef2 = { current: 0 }
+    return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(rafRef2.current) }
+  }, [replayHomeEntrance])
 
   // Load boot video paths on mount
   useEffect(() => {
@@ -3709,7 +3724,7 @@ function App(): React.JSX.Element {
   )
 
   return (
-    <div className={`launcher ${showIdleMode ? 'idle' : ''} ${isWallpaperMode ? 'wallpaper-mode' : ''}`}>
+    <div className={`launcher ${showIdleMode ? 'idle' : ''} ${isWallpaperMode ? 'wallpaper-mode' : ''} ${replayHomeEntrance ? 'replay-entrance' : ''}`}>
       {/* ── Sidebar ── */}
       <div
         className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
@@ -6163,22 +6178,6 @@ function App(): React.JSX.Element {
                                   <span>{video.downloads} {t.bootVideoDownloads}</span>
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                className={`btn-primary settings-mini-btn ${bootVideoDownloading === video.id ? 'downloading' : ''}`}
-                                disabled={bootVideoDownloading === video.id}
-                                onClick={async () => {
-                                  setBootVideoDownloading(video.id)
-                                  const url = video.downloadUrl || video.video || `https://steamdeckrepo.com/post/download/${video.id}`
-                                  const result = await window.api.downloadBootVideo(url, 'boot')
-                                  if (result.success) {
-                                    setBootVideoPaths(prev => ({ ...prev, boot: result.path || null }))
-                                  }
-                                  setBootVideoDownloading(null)
-                                }}
-                              >
-                                {bootVideoDownloading === video.id ? '...' : t.bootVideoDownload}
-                              </button>
                             </div>
                           ))}
                         </div>
@@ -6217,19 +6216,19 @@ function App(): React.JSX.Element {
       {showBootPlayer && bootPlayerVideoPath && (
         <div
           className="boot-player-overlay"
-          onClick={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
+          onClick={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
         >
           <video
             ref={bootPlayerVideoRef}
             src={bootPlayerVideoPath || undefined}
             className="boot-player-video"
             playsInline
-            onEnded={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
+            onEnded={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
           />
           <button
             type="button"
             className="boot-player-skip"
-            onClick={(e) => { e.stopPropagation(); setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
+            onClick={(e) => { e.stopPropagation(); setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
           >
             {t.close || 'Skip'} ✕
           </button>

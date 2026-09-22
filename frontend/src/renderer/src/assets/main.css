@@ -8118,7 +8118,7 @@
 .boot-player-video {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .boot-player-skip {
@@ -8140,4 +8140,14 @@
 .boot-player-skip:hover {
   background: rgba(242, 38, 63, 0.8);
   color: #fff;
+}
+
+/* ── Replay home entrance animation after boot video ends ── */
+.launcher.replay-entrance .header-bar,
+.launcher.replay-entrance .hero-section,
+.launcher.replay-entrance .games-row-container,
+.launcher.replay-entrance .bottom-row {
+  animation: none !important;
+  opacity: 0;
+  transform: translateY(24px);
 }
