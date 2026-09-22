@@ -387,7 +387,7 @@
 }
 
 .game-card.selected {
-  border-color: var(--gbl-accent);
+  border-color: #fff;
   transform: translateY(-6px);
 }
 
@@ -450,7 +450,7 @@
 }
 
 .game-card.library-card.selected {
-  border-color: var(--gbl-accent);
+  border-color: #fff;
 }
 
 .library-card-content {
@@ -1477,8 +1477,14 @@
   box-shadow: none;
 }
 
-.library-view-grid .library-item.selected {
-  box-shadow: none;
+.library-view-grid .library-item.selected::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid #fff;
+  border-radius: var(--gbl-radius-sm);
+  pointer-events: none;
+  z-index: 10;
 }
 
 .library-view-grid .library-item:focus,
@@ -2583,6 +2589,7 @@
     opacity: 0;
     transform: scale(0.9);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
