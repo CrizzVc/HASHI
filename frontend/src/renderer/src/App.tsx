@@ -647,7 +647,7 @@ function App(): React.JSX.Element {
           setShowBootPlayer(true)
         }
       }
-    }).catch(() => {})
+    }).catch(() => { })
   }, [])
 
   // Search boot videos when tab is opened or query changes
@@ -682,7 +682,7 @@ function App(): React.JSX.Element {
   useEffect(() => {
     window.api?.getAppVersion?.().then((ver) => {
       if (ver) setAppVersion(ver)
-    }).catch(() => {})
+    }).catch(() => { })
   }, [])
 
   // Load backend port on startup
@@ -691,9 +691,9 @@ function App(): React.JSX.Element {
       if (data?.port) {
         setBackendPort(data.port)
         setPendingPort(data.port)
-        try { localStorage.setItem('gbl-backend-port', String(data.port)) } catch {}
+        try { localStorage.setItem('gbl-backend-port', String(data.port)) } catch { }
       }
-    }).catch(() => {})
+    }).catch(() => { })
   }, [])
 
   // ── Comprobación automática de versión al iniciar ──
@@ -5756,7 +5756,7 @@ function App(): React.JSX.Element {
                             const result = await window.api?.setBackendPort?.(pendingPort)
                             if (result?.success) {
                               setBackendPort(pendingPort)
-                              try { localStorage.setItem('gbl-backend-port', String(pendingPort)) } catch {}
+                              try { localStorage.setItem('gbl-backend-port', String(pendingPort)) } catch { }
                               setTimeout(() => setShowPortChangeModal(false), 2000)
                             } else if (result?.error === 'port_in_use') {
                               setShowPortChangeModal(false)
