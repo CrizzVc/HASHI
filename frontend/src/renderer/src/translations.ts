@@ -221,6 +221,9 @@ export interface TranslationSchema {
   checkNewVersions: string
   updateAvailable: string
   updateAvailableDesc: string
+  newVersionFound: string
+  hashiUpToDate: string
+  errorCheckingUpdates: string
   otherTitle: string
   otherSubtitle: string
   defaultStore: string
@@ -509,6 +512,9 @@ export const translations: Record<Language, TranslationSchema> = {
     checkNewVersions: 'Comprobar nuevas versiones',
     updateAvailable: 'Hay una actualización disponible.',
     updateAvailableDesc: 'Haz clic para descargar la nueva versión',
+    newVersionFound: 'Nueva versión encontrada: v',
+    hashiUpToDate: 'HASHI está actualizado',
+    errorCheckingUpdates: 'Error al buscar actualizaciones',
     otherTitle: 'Otros',
     otherSubtitle: 'Configuración general de la aplicación',
     defaultStore: 'Tienda por defecto',
@@ -774,6 +780,9 @@ export const translations: Record<Language, TranslationSchema> = {
     checkNewVersions: 'Check for new versions',
     updateAvailable: 'An update is available.',
     updateAvailableDesc: 'Click to download the new version',
+    newVersionFound: 'New version found: v',
+    hashiUpToDate: 'HASHI is up to date',
+    errorCheckingUpdates: 'Error checking for updates',
     otherTitle: 'Other',
     otherSubtitle: 'General application settings',
     defaultStore: 'Default store',

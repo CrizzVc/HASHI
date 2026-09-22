@@ -2349,19 +2349,19 @@ function App(): React.JSX.Element {
       const currentVer = localVer || appVersion || DEFAULT_APP_VERSION
       const cmp = compareVersions(apiVersion, currentVer)
       if (cmp > 0) {
-        setUpdateMessage(`Nueva versión encontrada: v${apiVersion}`)
+        setUpdateMessage(`${t.newVersionFound}${apiVersion}`)
         setUpdateLink(downloadLink)
       } else {
-        setUpdateMessage('HASHI está actualizado')
+        setUpdateMessage(t.hashiUpToDate)
         setTimeout(() => setUpdateMessage(null), 4000)
       }
     } catch {
-      setUpdateMessage('Error al buscar actualizaciones')
+      setUpdateMessage(t.errorCheckingUpdates)
       setTimeout(() => setUpdateMessage(null), 4000)
     } finally {
       setIsCheckingUpdate(false)
     }
-  }, [appVersion])
+  }, [appVersion, t])
 
   const handleOpenWallpaperFolderPicker = useCallback(async () => {
     try {
