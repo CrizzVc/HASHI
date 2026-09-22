@@ -2781,6 +2781,38 @@ function App(): React.JSX.Element {
         return
       }
 
+      if (e.key === 'Home') {
+        e.preventDefault()
+        if (isHomeCardFocused) {
+          setIsIdle((prev) => !prev)
+        } else {
+          enterHomeIdle()
+        }
+        return
+      }
+
+      if (e.key === 'PageUp' && libraryView) {
+        e.preventDefault()
+        if (librarySource !== 'local') {
+          playPages()
+          setLibrarySource('local')
+          if (sortedLibraryGames.length > 0) setSelectedGameId(sortedLibraryGames[0]?.id ?? null)
+        }
+        return
+      }
+
+      if (e.key === 'PageDown' && libraryView) {
+        e.preventDefault()
+        if (librarySource !== 'steam') {
+          playPages()
+          setLibrarySource('steam')
+          if (steamAccount.linked && steamLibrary.length > 0) {
+            setSelectedSteamAppId(String(steamLibrary[0].appid))
+          }
+        }
+        return
+      }
+
       if (showHelperModal) {
         if (e.key === 'Escape') {
           e.preventDefault()
