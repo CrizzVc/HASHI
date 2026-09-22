@@ -637,6 +637,8 @@ function App(): React.JSX.Element {
   const [bootVideoDownloading, setBootVideoDownloading] = useState<string | null>(null)
   const [showBootPlayer, setShowBootPlayer] = useState(false)
   const [bootPlayerVideoPath, setBootPlayerVideoPath] = useState<string | null>(null)
+  const [bootVideoReloadKey, setBootVideoReloadKey] = useState(0)
+  const [bootVideoFailed, setBootVideoFailed] = useState(false)
   const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
   const [replayHomeEntrance, setReplayHomeEntrance] = useState(false)
 
@@ -661,6 +663,7 @@ function App(): React.JSX.Element {
         setBootVideoPaths(paths)
         if (paths.boot) {
           setBootPlayerVideoPath(paths.boot)
+          setBootVideoFailed(false)
           setShowBootPlayer(true)
         }
       }
@@ -673,7 +676,7 @@ function App(): React.JSX.Element {
   // el navegador lo rechaza, se reintenta silenciado y luego se le quita el
   // mute apenas arranca la reproducción (eso sí suele estar permitido).
   useEffect(() => {
-    if (!showBootPlayer || !bootPlayerVideoPath) return
+    if (!showBootPlayer || !bootPlayerVideoPath || bootVideoFailed) return
     const videoEl = bootPlayerVideoRef.current
     if (!videoEl) return
 
@@ -692,13 +695,29 @@ function App(): React.JSX.Element {
             .then(() => {
               window.setTimeout(() => { videoEl.muted = false }, 150)
             })
-            .catch(() => { })
+            .catch(() => {
+              setBootVideoFailed(true)
+              setShowBootPlayer(false)
+              setBootPlayerVideoPath(null)
+              setReplayHomeEntrance(true)
+            })
         })
       }
     }
 
     tryPlay()
-  }, [showBootPlayer, bootPlayerVideoPath])
+
+    // Safety timer: if video doesn't finish within 20 seconds, dismiss automatically
+    const safetyTimer = setTimeout(() => {
+      if (showBootPlayer) {
+        setShowBootPlayer(false)
+        setBootPlayerVideoPath(null)
+        setReplayHomeEntrance(true)
+      }
+    }, 20000)
+
+    return () => clearTimeout(safetyTimer)
+  }, [showBootPlayer, bootPlayerVideoPath, bootVideoReloadKey, bootVideoFailed])
 
   // ── Aplicar el video previsualizado como boot o suspend ──
   const handleApplyPreviewAs = useCallback(async (type: 'boot' | 'suspend') => {
@@ -6213,16 +6232,29 @@ function App(): React.JSX.Element {
       )}
 
       {/* ── Boot Video Fullscreen Player ── */}
-      {showBootPlayer && bootPlayerVideoPath && (
+      {showBootPlayer && bootPlayerVideoPath && !bootVideoFailed && (
         <div
           className="boot-player-overlay"
           onClick={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
         >
           <video
             ref={bootPlayerVideoRef}
+            key={`${bootVideoReloadKey}-${bootPlayerVideoPath}`}
             src={bootPlayerVideoPath || undefined}
             className="boot-player-video"
             playsInline
+            preload="auto"
+            onError={() => {
+              console.warn('Boot video failed to load/play, retrying or skipping.');
+              if (bootVideoReloadKey < 2) {
+                setBootVideoReloadKey((current) => current + 1)
+              } else {
+                setBootVideoFailed(true)
+                setShowBootPlayer(false)
+                setBootPlayerVideoPath(null)
+                setReplayHomeEntrance(true)
+              }
+            }}
             onEnded={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
           />
           <button
