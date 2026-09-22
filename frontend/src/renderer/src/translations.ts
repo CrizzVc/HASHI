@@ -236,6 +236,23 @@ export interface TranslationSchema {
   backendRestarting: string
   apply: string
 
+  // Settings - Boot Video Tab
+  tabBootVideo: string
+  bootVideoTitle: string
+  bootVideoSubtitle: string
+  bootVideoSearch: string
+  bootVideoDownload: string
+  bootVideoDownloaded: string
+  bootVideoDelete: string
+  bootVideoActive: string
+  bootVideoNone: string
+  bootVideoLoading: string
+  bootVideoError: string
+  bootVideoPreview: string
+  bootVideoBy: string
+  bootVideoLikes: string
+  bootVideoDownloads: string
+
   // Settings - Customization Tab
   profileTitle: string
   username: string
@@ -527,6 +544,22 @@ export const translations: Record<Language, TranslationSchema> = {
     backendRestarting: 'Reiniciando backend...',
     apply: 'Aplicar',
 
+    tabBootVideo: 'Video de arranque',
+    bootVideoTitle: 'Video de arranque',
+    bootVideoSubtitle: 'Selecciona un video que se reproducirá al iniciar HASHI',
+    bootVideoSearch: 'Buscar videos...',
+    bootVideoDownload: 'Descargar',
+    bootVideoDownloaded: 'Descargado',
+    bootVideoDelete: 'Eliminar',
+    bootVideoActive: 'Activo',
+    bootVideoNone: 'No hay video de arranque configurado',
+    bootVideoLoading: 'Cargando videos...',
+    bootVideoError: 'Error al cargar videos',
+    bootVideoPreview: 'Vista previa',
+    bootVideoBy: 'por',
+    bootVideoLikes: 'likes',
+    bootVideoDownloads: 'descargas',
+
     profileTitle: 'Perfil',
     username: 'Nombre de usuario',
     usernameDesc: 'El nombre de usuario se guardará al salir o pulsar Enter. Haz clic en la foto para cambiarla (icono.png por defecto).',
@@ -794,6 +827,22 @@ export const translations: Record<Language, TranslationSchema> = {
     portChanged: 'Changing port...',
     backendRestarting: 'Restarting backend...',
     apply: 'Apply',
+
+    tabBootVideo: 'Boot Video',
+    bootVideoTitle: 'Boot Video',
+    bootVideoSubtitle: 'Select a video to play when HASHI starts',
+    bootVideoSearch: 'Search videos...',
+    bootVideoDownload: 'Download',
+    bootVideoDownloaded: 'Downloaded',
+    bootVideoDelete: 'Delete',
+    bootVideoActive: 'Active',
+    bootVideoNone: 'No boot video configured',
+    bootVideoLoading: 'Loading videos...',
+    bootVideoError: 'Error loading videos',
+    bootVideoPreview: 'Preview',
+    bootVideoBy: 'by',
+    bootVideoLikes: 'likes',
+    bootVideoDownloads: 'downloads',
 
     profileTitle: 'Profile',
     username: 'Username',

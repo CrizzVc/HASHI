@@ -130,6 +130,11 @@ declare global {
       getBackendPort: () => Promise<{ port: number }>
       setBackendPort: (port: number) => Promise<{ success: boolean; error?: string }>
       checkPortInUse: (port: number) => Promise<{ inUse: boolean }>
+      // Boot video management
+      getBootVideoPath: () => Promise<{ boot: string | null; suspend: string | null }>
+      downloadBootVideo: (url: string, target: string) => Promise<{ success: boolean; path?: string; error?: string }>
+      deleteBootVideo: (target: string) => Promise<{ success: boolean; error?: string }>
+      fetchSteamDeckRepoPosts: () => Promise<{ success: boolean; posts?: any[]; error?: string }>
       // Window control
       minimizeWindow: () => Promise<void>
       quitApp: () => Promise<void>

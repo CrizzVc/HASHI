@@ -91,6 +91,12 @@ const api = {
   getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
   setBackendPort: (port: number) => ipcRenderer.invoke('set-backend-port', port),
   checkPortInUse: (port: number) => ipcRenderer.invoke('check-port-in-use', port),
+  // Boot video management
+  getBootVideoPath: () => ipcRenderer.invoke('get-boot-video-path'),
+  downloadBootVideo: (url: string, target: string) => ipcRenderer.invoke('download-boot-video', url, target),
+  deleteBootVideo: (target: string) => ipcRenderer.invoke('delete-boot-video', target),
+  // SteamDeckRepo API (routed through main process to avoid CSP)
+  fetchSteamDeckRepoPosts: () => ipcRenderer.invoke('steamdeckrepo-fetch-posts'),
   // Window control — minimizeWindow oculta sin cerrar; quitApp cierra de verdad
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   quitApp: () => ipcRenderer.invoke('quit-app')

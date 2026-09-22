@@ -9,6 +9,9 @@ import * as crypto from 'crypto'
 import { spawn, fork, execSync, type ChildProcess } from 'child_process'
 import * as http from 'http'
 import * as net from 'net'
+
+// Permitir autoplay de video con sonido sin interacción del usuario (boot video)
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 import { URL, pathToFileURL } from 'url'
 import { translations } from '../renderer/src/translations'
 
@@ -2239,6 +2242,79 @@ app.whenReady().then(() => {
 
   ipcMain.handle('check-port-in-use', async (_event, port: number) => {
     return { inUse: await checkPortInUse(port) }
+  })
+
+  // ── Boot Video management ──
+  ipcMain.handle('get-boot-video-path', () => {
+    const splashDir = join(app.getPath('userData'), 'hashi', 'splash')
+    const bootPath = join(splashDir, 'boot.webm')
+    const suspendPath = join(splashDir, 'suspend.webm')
+    return {
+      boot: fs.existsSync(bootPath) ? bootPath : null,
+      suspend: fs.existsSync(suspendPath) ? suspendPath : null
+    }
+  })
+
+  ipcMain.handle('download-boot-video', async (_event, url: string, target: string) => {
+    try {
+      if (target !== 'boot' && target !== 'suspend') {
+        return { success: false, error: `Target inválido: ${target}` }
+      }
+      if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+        return { success: false, error: 'URL de descarga inválida.' }
+      }
+
+      const splashDir = join(app.getPath('userData'), 'hashi', 'splash')
+      if (!fs.existsSync(splashDir)) {
+        fs.mkdirSync(splashDir, { recursive: true })
+      }
+
+      const response = await fetch(url)
+      if (!response.ok) {
+        return { success: false, error: `SteamDeckRepo respondió ${response.status} ${response.statusText}` }
+      }
+
+      const arrayBuffer = await response.arrayBuffer()
+      const destPath = join(splashDir, `${target}.webm`)
+      const tmpPath = `${destPath}.tmp`
+      fs.writeFileSync(tmpPath, Buffer.from(arrayBuffer))
+      fs.renameSync(tmpPath, destPath)
+
+      return { success: true, path: destPath }
+    } catch (error: any) {
+      console.error('Error downloading boot video:', error)
+      return { success: false, error: error?.message || String(error) }
+    }
+  })
+
+  ipcMain.handle('delete-boot-video', async (_event, target: string) => {
+    try {
+      const splashDir = join(app.getPath('userData'), 'hashi', 'splash')
+      const filePath = join(splashDir, `${target}.webm`)
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath)
+        return { success: true }
+      }
+      return { success: false, error: 'Archivo no encontrado' }
+    } catch (error: any) {
+      return { success: false, error: error?.message || String(error) }
+    }
+  })
+
+  // ── SteamDeckRepo API (runs in main process to avoid CSP) ──
+  ipcMain.handle('steamdeckrepo-fetch-posts', async () => {
+    try {
+      const response = await fetch('https://steamdeckrepo.com/api/posts/all', {
+        method: 'GET',
+        headers: { Accept: 'application/json', 'User-Agent': 'HASHI/1.0' }
+      })
+      if (response.status === 429) return { success: false, error: 'Rate limit exceeded' }
+      if (!response.ok) return { success: false, error: `${response.status} ${response.statusText}` }
+      const data = await response.json()
+      return { success: true, posts: data.posts || [] }
+    } catch (error: any) {
+      return { success: false, error: error?.message || String(error) }
+    }
   })
 
   startBackend()

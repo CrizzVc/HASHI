@@ -557,7 +557,7 @@ function App(): React.JSX.Element {
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null)
 
   // Settings modal state
-  const [settingsTab, setSettingsTab] = useState<'inicio' | 'personalizacion' | 'ayuda'>('inicio')
+  const [settingsTab, setSettingsTab] = useState<'inicio' | 'personalizacion' | 'ayuda' | 'bootvideo'>('inicio')
   const [language, setLanguage] = useState<Language>(() => {
     try {
       return (localStorage.getItem('gbl-language') as Language) || 'en'
@@ -624,6 +624,59 @@ function App(): React.JSX.Element {
   const [pendingPort, setPendingPort] = useState<number>(3000)
   const [portError, setPortError] = useState<string | null>(null)
   const [showPortChangeModal, setShowPortChangeModal] = useState(false)
+
+  // Boot video state
+  const [bootVideoPaths, setBootVideoPaths] = useState<{ boot: string | null; suspend: string | null }>({ boot: null, suspend: null })
+  const [bootVideoSearchQuery, setBootVideoSearchQuery] = useState('')
+  const [bootVideoResults, setBootVideoResults] = useState<any[]>([])
+  const [bootVideoPage, setBootVideoPage] = useState(1)
+  const [bootVideoTotalPages, setBootVideoTotalPages] = useState(1)
+  const [bootVideoLoading, setBootVideoLoading] = useState(false)
+  const [bootVideoPreview, setBootVideoPreview] = useState<string | null>(null)
+  const [bootVideoDownloading, setBootVideoDownloading] = useState<string | null>(null)
+  const [showBootPlayer, setShowBootPlayer] = useState(false)
+  const [bootPlayerVideoPath, setBootPlayerVideoPath] = useState<string | null>(null)
+
+  // Load boot video paths on mount
+  useEffect(() => {
+    window.api?.getBootVideoPath?.().then((paths) => {
+      if (paths) {
+        setBootVideoPaths(paths)
+        if (paths.boot) {
+          setBootPlayerVideoPath(paths.boot)
+          setShowBootPlayer(true)
+        }
+      }
+    }).catch(() => {})
+  }, [])
+
+  // Search boot videos when tab is opened or query changes
+  useEffect(() => {
+    if (settingsTab !== 'bootvideo') return
+    let cancelled = false
+    const doSearch = async () => {
+      setBootVideoLoading(true)
+      try {
+        const { searchSteamDeckRepo } = await import('./services/steamDeckRepoService')
+        const result = await searchSteamDeckRepo({ query: bootVideoSearchQuery, type: 'boot', sort: 'newest', page: bootVideoPage, limit: 24 })
+        if (!cancelled) {
+          setBootVideoResults(result.items)
+          setBootVideoTotalPages(result.totalPages)
+        }
+      } catch {
+        if (!cancelled) setBootVideoResults([])
+      } finally {
+        if (!cancelled) setBootVideoLoading(false)
+      }
+    }
+    const timer = setTimeout(doSearch, bootVideoSearchQuery ? 500 : 0)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [settingsTab, bootVideoSearchQuery, bootVideoPage])
+
+  // Reset page to 1 when search query changes
+  useEffect(() => {
+    setBootVideoPage(1)
+  }, [bootVideoSearchQuery])
 
   // Obtener la versión dinámica de la app
   useEffect(() => {
@@ -5532,6 +5585,14 @@ function App(): React.JSX.Element {
                   <HelpIcon size={18} className="settings-nav-icon" />
                   <span>{t.tabHelp}</span>
                 </button>
+                <button
+                  type="button"
+                  className={`settings-nav-item ${settingsTab === 'bootvideo' ? 'active' : ''}`}
+                  onClick={() => setSettingsTab('bootvideo')}
+                >
+                  <PlayIcon size={18} className="settings-nav-icon" />
+                  <span>{t.tabBootVideo}</span>
+                </button>
               </nav>
             </aside>
 
@@ -5973,7 +6034,173 @@ function App(): React.JSX.Element {
                   </div>
                 </div>
               )}
+              {settingsTab === 'bootvideo' && (
+                <div className="settings-tab-panel">
+                  <div className="settings-section">
+                    <h3 className="settings-section-title">{t.bootVideoTitle}</h3>
+                    <p className="settings-section-subtitle">{t.bootVideoSubtitle}</p>
+
+                    {/* Current active video */}
+                    {bootVideoPaths.boot ? (
+                      <div className="boot-video-active-card">
+                        <div className="boot-video-active-info">
+                          <PlayIcon size={18} />
+                          <span>{t.bootVideoActive}</span>
+                        </div>
+                        <div className="boot-video-active-preview">
+                          <video src={`file://${bootVideoPaths.boot}`} className="boot-video-preview-thumb" muted />
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-danger settings-mini-btn"
+                          onClick={async () => {
+                            const result = await window.api.deleteBootVideo('boot')
+                            if (result.success) setBootVideoPaths(prev => ({ ...prev, boot: null }))
+                          }}
+                        >
+                          {t.bootVideoDelete}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="boot-video-none-card">
+                        <PlayIcon size={24} />
+                        <span>{t.bootVideoNone}</span>
+                      </div>
+                    )}
+
+                    {/* Search bar */}
+                    <div className="boot-video-search-bar">
+                      <SearchIcon size={16} />
+                      <input
+                        type="text"
+                        value={bootVideoSearchQuery}
+                        onChange={(e) => setBootVideoSearchQuery(e.target.value)}
+                        placeholder={t.bootVideoSearch}
+                        className="boot-video-search-input"
+                      />
+                    </div>
+
+                    {/* Video grid */}
+                    {bootVideoLoading ? (
+                      <div className="boot-video-loading">
+                        <div className="boot-video-spinner" />
+                        <span>{t.bootVideoLoading}</span>
+                      </div>
+                    ) : bootVideoResults.length > 0 ? (
+                      <>
+                        <div className="boot-video-grid">
+                          {bootVideoResults.map((video) => (
+                            <div key={video.id} className="boot-video-card">
+                              <div className="boot-video-thumb-wrapper">
+                                <img src={video.thumbnail} alt={video.title} className="boot-video-thumb" />
+                                <div className="boot-video-thumb-overlay">
+                                  <button
+                                    type="button"
+                                    className="boot-video-play-btn"
+                                    onClick={() => setBootVideoPreview(video.previewVideo || video.video)}
+                                  >
+                                    <PlayIcon size={24} />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="boot-video-info">
+                                <h4 className="boot-video-card-title">{video.title}</h4>
+                                <p className="boot-video-card-author">{t.bootVideoBy} {video.author}</p>
+                                <div className="boot-video-card-stats">
+                                  <span>{video.likes} {t.bootVideoLikes}</span>
+                                  <span>{video.downloads} {t.bootVideoDownloads}</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className={`btn-primary settings-mini-btn ${bootVideoDownloading === video.id ? 'downloading' : ''}`}
+                                disabled={bootVideoDownloading === video.id}
+                                onClick={async () => {
+                                  setBootVideoDownloading(video.id)
+                                  const url = video.downloadUrl || `https://steamdeckrepo.com/post/download/${video.id}`
+                                  const result = await window.api.downloadBootVideo(url, 'boot')
+                                  if (result.success) {
+                                    setBootVideoPaths(prev => ({ ...prev, boot: result.path || null }))
+                                  }
+                                  setBootVideoDownloading(null)
+                                }}
+                              >
+                                {bootVideoDownloading === video.id ? '...' : t.bootVideoDownload}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        {bootVideoTotalPages > 1 && (
+                          <div className="boot-video-pagination">
+                            <button
+                              type="button"
+                              className="boot-video-page-btn"
+                              disabled={bootVideoPage <= 1}
+                              onClick={() => setBootVideoPage(p => p - 1)}
+                            >
+                              <ChevronLeftIcon size={16} />
+                            </button>
+                            <span className="boot-video-page-info">{bootVideoPage} / {bootVideoTotalPages}</span>
+                            <button
+                              type="button"
+                              className="boot-video-page-btn"
+                              disabled={bootVideoPage >= bootVideoTotalPages}
+                              onClick={() => setBootVideoPage(p => p + 1)}
+                            >
+                              <ChevronRightIcon size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </main>
+          </div>
+        </div>
+      )}
+
+      {/* ── Boot Video Fullscreen Player ── */}
+      {showBootPlayer && bootPlayerVideoPath && (
+        <div
+          className="boot-player-overlay"
+          onClick={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
+        >
+          <video
+            src={`file://${bootPlayerVideoPath}`}
+            className="boot-player-video"
+            autoPlay
+            playsInline
+            onEnded={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
+          />
+          <button
+            type="button"
+            className="boot-player-skip"
+            onClick={(e) => { e.stopPropagation(); setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
+          >
+            {t.close || 'Skip'} ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── Boot Video Preview Modal ── */}
+      {bootVideoPreview && (
+        <div className="modal-overlay boot-video-preview-overlay" onClick={() => setBootVideoPreview(null)}>
+          <div className="boot-video-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="modal-title">{t.bootVideoPreview}</h2>
+              <button className="modal-close" onClick={() => setBootVideoPreview(null)}>
+                <CloseIcon size={20} />
+              </button>
+            </div>
+            <video
+              src={bootVideoPreview}
+              className="boot-video-preview-player"
+              controls
+              autoPlay
+              playsInline
+            />
           </div>
         </div>
       )}
