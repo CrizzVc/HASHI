@@ -8008,6 +8008,8 @@
   width: 700px;
   max-width: 90vw;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .boot-video-preview-player {
@@ -8015,6 +8017,82 @@
   display: block;
   background: #000;
   max-height: 70vh;
+}
+
+.boot-video-preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  background: #15152a;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
+}
+
+.boot-video-preview-apply-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+
+.boot-video-preview-apply-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.boot-video-apply-btn {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.boot-video-apply-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.boot-video-apply-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.boot-video-apply-btn.boot {
+  background: #f2263f;
+  border-color: #f2263f;
+}
+
+.boot-video-apply-btn.boot:hover:not(:disabled) {
+  background: #d41e35;
+}
+
+.boot-video-apply-btn.suspend {
+  background: rgba(102, 178, 255, 0.16);
+  border-color: rgba(102, 178, 255, 0.4);
+  color: #8ecbff;
+}
+
+.boot-video-apply-btn.suspend:hover:not(:disabled) {
+  background: rgba(102, 178, 255, 0.26);
+}
+
+.boot-video-apply-btn.cancel {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.boot-video-apply-btn.cancel:hover:not(:disabled) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* ── Fullscreen Boot Player ── */

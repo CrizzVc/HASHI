@@ -1,5 +1,5 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu } from 'electron'
-import { join, dirname, extname, basename } from 'path'
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol, net } from 'electron'
+import { join, dirname, extname, basename, normalize } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import steamLogoAsset from '../renderer/src/assets/tiendas/steamLogo.png?asset'
 import hashiLogoAsset from '../renderer/src/assets/images/HASHI_LOGO_BLANCO.svg?asset'
@@ -8,11 +8,39 @@ import * as fs from 'fs'
 import * as crypto from 'crypto'
 import { spawn, fork, execSync, type ChildProcess } from 'child_process'
 import * as http from 'http'
-import * as net from 'net'
+import * as nodeNet from 'net'
 
 // Permitir autoplay de video con sonido sin interacción del usuario (boot video)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 import { URL, pathToFileURL } from 'url'
+
+// ── Protocolo personalizado para servir archivos locales fuera del paquete de la app ──
+// Chromium bloquea `file://` hacia rutas arbitrarias del sistema (p.ej. la carpeta
+// userData) cuando la página no fue cargada desde ese mismo directorio; de ahí el
+// error "Not allowed to load local resource". Este esquema privilegiado (con
+// soporte de fetch/streaming, necesario para que el <video> pueda hacer seek) sirve
+// como puente seguro para reproducir archivos como el boot video.
+const MEDIA_PROTOCOL_SCHEME = 'hashi-media'
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: MEDIA_PROTOCOL_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+      bypassCSP: true
+    }
+  }
+])
+
+// Convierte una ruta absoluta del filesystem en una URL servible por el renderer
+// a través del protocolo `hashi-media://`.
+function toMediaUrl(absPath: string): string {
+  return `${MEDIA_PROTOCOL_SCHEME}://local-file/${encodeURIComponent(absPath)}`
+}
 import { translations } from '../renderer/src/translations'
 
 const STEAM_API_KEY = 'B1F361EA3C07B455DC8B0D06ED179B00'
@@ -65,7 +93,7 @@ function saveBackendPort(port: number): void {
 
 function checkPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const server = net.createServer()
+    const server = nodeNet.createServer()
     server.once('error', () => resolve(true))
     server.once('listening', () => {
       server.close(() => resolve(false))
@@ -284,7 +312,7 @@ function stopAllExtensionBackends(): void {
     if (child && !child.killed) {
       try {
         child.kill()
-      } catch {}
+      } catch { }
     }
   }
   runningExtensionProcesses.clear()
@@ -933,6 +961,33 @@ function createWindow(): void {
 app.whenReady().then(() => {
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
+
+  // ── Handler del protocolo hashi-media:// ──
+  // Sirve archivos locales (boot video, etc.) fuera del paquete de la app.
+  // Restringido a la carpeta userData: nunca expone el resto del filesystem.
+  protocol.handle(MEDIA_PROTOCOL_SCHEME, async (request) => {
+    try {
+      const requestUrl = new URL(request.url)
+      const encodedPath = requestUrl.pathname.replace(/^\//, '')
+      const decodedPath = decodeURIComponent(encodedPath)
+      const filePath = normalize(decodedPath)
+
+      const userDataDir = normalize(app.getPath('userData'))
+      if (!filePath.toLowerCase().startsWith(userDataDir.toLowerCase())) {
+        return new Response('Forbidden', { status: 403 })
+      }
+      if (!fs.existsSync(filePath)) {
+        return new Response('Not found', { status: 404 })
+      }
+
+      // net.fetch sobre una file:// URL respeta Range headers, lo que permite
+      // hacer seek en el <video> en vez de tener que cargarlo entero primero.
+      return await net.fetch(pathToFileURL(filePath).toString())
+    } catch (error) {
+      console.error('[hashi-media] Error sirviendo archivo:', error)
+      return new Response('Internal error', { status: 500 })
+    }
+  })
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -2246,12 +2301,12 @@ app.whenReady().then(() => {
 
   // ── Boot Video management ──
   ipcMain.handle('get-boot-video-path', () => {
-    const splashDir = join(app.getPath('userData'), 'hashi', 'splash')
+    const splashDir = join(app.getPath('userData'), 'splash')
     const bootPath = join(splashDir, 'boot.webm')
     const suspendPath = join(splashDir, 'suspend.webm')
     return {
-      boot: fs.existsSync(bootPath) ? bootPath : null,
-      suspend: fs.existsSync(suspendPath) ? suspendPath : null
+      boot: fs.existsSync(bootPath) ? toMediaUrl(bootPath) : null,
+      suspend: fs.existsSync(suspendPath) ? toMediaUrl(suspendPath) : null
     }
   })
 
@@ -2264,7 +2319,7 @@ app.whenReady().then(() => {
         return { success: false, error: 'URL de descarga inválida.' }
       }
 
-      const splashDir = join(app.getPath('userData'), 'hashi', 'splash')
+      const splashDir = join(app.getPath('userData'), 'splash')
       if (!fs.existsSync(splashDir)) {
         fs.mkdirSync(splashDir, { recursive: true })
       }
@@ -2280,7 +2335,7 @@ app.whenReady().then(() => {
       fs.writeFileSync(tmpPath, Buffer.from(arrayBuffer))
       fs.renameSync(tmpPath, destPath)
 
-      return { success: true, path: destPath }
+      return { success: true, path: toMediaUrl(destPath) }
     } catch (error: any) {
       console.error('Error downloading boot video:', error)
       return { success: false, error: error?.message || String(error) }
@@ -2289,7 +2344,7 @@ app.whenReady().then(() => {
 
   ipcMain.handle('delete-boot-video', async (_event, target: string) => {
     try {
-      const splashDir = join(app.getPath('userData'), 'hashi', 'splash')
+      const splashDir = join(app.getPath('userData'), 'splash')
       const filePath = join(splashDir, `${target}.webm`)
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath)

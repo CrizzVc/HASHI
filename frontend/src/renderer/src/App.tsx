@@ -633,9 +633,11 @@ function App(): React.JSX.Element {
   const [bootVideoTotalPages, setBootVideoTotalPages] = useState(1)
   const [bootVideoLoading, setBootVideoLoading] = useState(false)
   const [bootVideoPreview, setBootVideoPreview] = useState<string | null>(null)
+  const [bootVideoPreviewItem, setBootVideoPreviewItem] = useState<any>(null)
   const [bootVideoDownloading, setBootVideoDownloading] = useState<string | null>(null)
   const [showBootPlayer, setShowBootPlayer] = useState(false)
   const [bootPlayerVideoPath, setBootPlayerVideoPath] = useState<string | null>(null)
+  const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
 
   // Load boot video paths on mount
   useEffect(() => {
@@ -649,6 +651,56 @@ function App(): React.JSX.Element {
       }
     }).catch(() => { })
   }, [])
+
+  // ── Reproducción del video de arranque a pantalla completa ──
+  // Como este player se abre solo (sin click del usuario), el navegador puede
+  // bloquear el autoplay CON sonido. Se intenta reproducir con sonido y, si
+  // el navegador lo rechaza, se reintenta silenciado y luego se le quita el
+  // mute apenas arranca la reproducción (eso sí suele estar permitido).
+  useEffect(() => {
+    if (!showBootPlayer || !bootPlayerVideoPath) return
+    const videoEl = bootPlayerVideoRef.current
+    if (!videoEl) return
+
+    videoEl.currentTime = 0
+    videoEl.volume = 1
+    videoEl.muted = false
+
+    const tryPlay = (): void => {
+      const playPromise = videoEl.play()
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {
+          // Autoplay con sonido bloqueado: reintenta silenciado y luego
+          // reactiva el sonido una vez que ya está reproduciendo.
+          videoEl.muted = true
+          videoEl.play()
+            .then(() => {
+              window.setTimeout(() => { videoEl.muted = false }, 150)
+            })
+            .catch(() => { })
+        })
+      }
+    }
+
+    tryPlay()
+  }, [showBootPlayer, bootPlayerVideoPath])
+
+  // ── Aplicar el video previsualizado como boot o suspend ──
+  const handleApplyPreviewAs = useCallback(async (type: 'boot' | 'suspend') => {
+    if (!bootVideoPreviewItem) return
+    setBootVideoDownloading(bootVideoPreviewItem.id)
+    try {
+      const url = bootVideoPreviewItem.downloadUrl || `https://steamdeckrepo.com/post/download/${bootVideoPreviewItem.id}`
+      const result = await window.api.downloadBootVideo(url, type)
+      if (result.success) {
+        setBootVideoPaths((prev) => ({ ...prev, [type]: result.path || null }))
+      }
+    } finally {
+      setBootVideoDownloading(null)
+      setBootVideoPreview(null)
+      setBootVideoPreviewItem(null)
+    }
+  }, [bootVideoPreviewItem])
 
   // Search boot videos when tab is opened or query changes
   useEffect(() => {
@@ -6048,7 +6100,7 @@ function App(): React.JSX.Element {
                           <span>{t.bootVideoActive}</span>
                         </div>
                         <div className="boot-video-active-preview">
-                          <video src={`file://${bootVideoPaths.boot}`} className="boot-video-preview-thumb" muted />
+                          <video src={bootVideoPaths.boot} className="boot-video-preview-thumb" muted />
                         </div>
                         <button
                           type="button"
@@ -6097,7 +6149,7 @@ function App(): React.JSX.Element {
                                   <button
                                     type="button"
                                     className="boot-video-play-btn"
-                                    onClick={() => setBootVideoPreview(video.previewVideo || video.video)}
+                                    onClick={() => { setBootVideoPreview(video.previewVideo || video.video); setBootVideoPreviewItem(video) }}
                                   >
                                     <PlayIcon size={24} />
                                   </button>
@@ -6168,9 +6220,9 @@ function App(): React.JSX.Element {
           onClick={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
         >
           <video
-            src={`file://${bootPlayerVideoPath}`}
+            ref={bootPlayerVideoRef}
+            src={bootPlayerVideoPath || undefined}
             className="boot-player-video"
-            autoPlay
             playsInline
             onEnded={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null) }}
           />
@@ -6186,11 +6238,11 @@ function App(): React.JSX.Element {
 
       {/* ── Boot Video Preview Modal ── */}
       {bootVideoPreview && (
-        <div className="modal-overlay boot-video-preview-overlay" onClick={() => setBootVideoPreview(null)}>
+        <div className="modal-overlay boot-video-preview-overlay" onClick={() => { setBootVideoPreview(null); setBootVideoPreviewItem(null) }}>
           <div className="boot-video-preview-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="modal-title">{t.bootVideoPreview}</h2>
-              <button className="modal-close" onClick={() => setBootVideoPreview(null)}>
+              <button className="modal-close" onClick={() => { setBootVideoPreview(null); setBootVideoPreviewItem(null) }}>
                 <CloseIcon size={20} />
               </button>
             </div>
@@ -6201,6 +6253,37 @@ function App(): React.JSX.Element {
               autoPlay
               playsInline
             />
+            {bootVideoPreviewItem && (
+              <div className="boot-video-preview-footer">
+                <span className="boot-video-preview-apply-label">Aplicar como:</span>
+                <div className="boot-video-preview-apply-actions">
+                  <button
+                    type="button"
+                    className="boot-video-apply-btn boot"
+                    disabled={bootVideoDownloading === bootVideoPreviewItem.id}
+                    onClick={() => void handleApplyPreviewAs('boot')}
+                  >
+                    {bootVideoDownloading === bootVideoPreviewItem.id ? '...' : 'Boot'}
+                  </button>
+                  <button
+                    type="button"
+                    className="boot-video-apply-btn suspend"
+                    disabled={bootVideoDownloading === bootVideoPreviewItem.id}
+                    onClick={() => void handleApplyPreviewAs('suspend')}
+                  >
+                    {bootVideoDownloading === bootVideoPreviewItem.id ? '...' : 'Suspend'}
+                  </button>
+                  <button
+                    type="button"
+                    className="boot-video-apply-btn cancel"
+                    disabled={bootVideoDownloading === bootVideoPreviewItem.id}
+                    onClick={() => { setBootVideoPreview(null); setBootVideoPreviewItem(null) }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
