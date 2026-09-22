@@ -7769,6 +7769,7 @@
   background: rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   margin-bottom: 20px;
+  height: 150px;
 }
 
 .boot-video-active-info {
@@ -7786,7 +7787,7 @@
   border-radius: 8px;
   overflow: hidden;
   max-width: 200px;
-  height: 48px;
+  height: 130px;
 }
 
 .boot-video-preview-thumb {
