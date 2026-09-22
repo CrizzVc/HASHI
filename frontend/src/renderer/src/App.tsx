@@ -621,7 +621,9 @@ function App(): React.JSX.Element {
     try { return localStorage.getItem(OMNICONSOLE_STORAGE_KEY) === 'true' } catch { return false }
   })
   const [backendPort, setBackendPort] = useState<number>(3000)
+  const [pendingPort, setPendingPort] = useState<number>(3000)
   const [portError, setPortError] = useState<string | null>(null)
+  const [showPortChangeModal, setShowPortChangeModal] = useState(false)
 
   // Obtener la versión dinámica de la app
   useEffect(() => {
@@ -635,6 +637,7 @@ function App(): React.JSX.Element {
     window.api?.getBackendPort?.().then((data) => {
       if (data?.port) {
         setBackendPort(data.port)
+        setPendingPort(data.port)
         try { localStorage.setItem('gbl-backend-port', String(data.port)) } catch {}
       }
     }).catch(() => {})
@@ -5636,25 +5639,41 @@ function App(): React.JSX.Element {
 
                     <div className="settings-other-row">
                       <span className="settings-other-label">{t.backendPort}</span>
-                      <select
-                        className="settings-other-select"
-                        value={backendPort}
-                        onChange={async (e) => {
-                          const newPort = Number(e.target.value)
-                          setPortError(null)
-                          const result = await window.api?.setBackendPort?.(newPort)
-                          if (result?.success) {
-                            setBackendPort(newPort)
-                            try { localStorage.setItem('gbl-backend-port', String(newPort)) } catch {}
-                          } else if (result?.error === 'port_in_use') {
-                            setPortError(t.portInUse)
-                          }
-                        }}
-                      >
-                        {Array.from({ length: 10 }, (_, i) => 3000 + i).map((p) => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <select
+                          className="settings-other-select"
+                          value={pendingPort}
+                          onChange={(e) => {
+                            setPendingPort(Number(e.target.value))
+                            setPortError(null)
+                          }}
+                        >
+                          {Array.from({ length: 10 }, (_, i) => 3000 + i).map((p) => (
+                            <option key={p} value={p}>{p}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          className={`settings-port-apply-btn ${pendingPort !== backendPort ? 'active' : ''}`}
+                          disabled={pendingPort === backendPort}
+                          onClick={async () => {
+                            setPortError(null)
+                            setShowPortChangeModal(true)
+                            setModal(null)
+                            const result = await window.api?.setBackendPort?.(pendingPort)
+                            if (result?.success) {
+                              setBackendPort(pendingPort)
+                              try { localStorage.setItem('gbl-backend-port', String(pendingPort)) } catch {}
+                              setTimeout(() => setShowPortChangeModal(false), 2000)
+                            } else if (result?.error === 'port_in_use') {
+                              setShowPortChangeModal(false)
+                              setPortError(t.portInUse)
+                            }
+                          }}
+                        >
+                          {t.apply}
+                        </button>
+                      </div>
                     </div>
                     {portError && (
                       <div className="settings-port-error">{portError}</div>
@@ -6175,6 +6194,21 @@ function App(): React.JSX.Element {
         onClose={() => setShowHelperModal(false)}
         language={language}
       />
+
+      {/* ── Port Change Modal ── */}
+      {showPortChangeModal && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="port-change-modal">
+            <DesktopIcon size={48} />
+            <div className="port-change-info">
+              <span className="port-change-old">{backendPort}</span>
+              <span className="port-change-arrow">&#10132;</span>
+              <span className="port-change-new">{pendingPort}</span>
+            </div>
+            <span className="port-change-msg">{t.portChanged}</span>
+          </div>
+        </div>
+      )}
 
     </div>
   )
