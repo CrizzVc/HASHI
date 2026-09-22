@@ -58,7 +58,7 @@ function normalizePost(post: any): SteamDeckRepoPost {
     author: post.user?.steam_name || post.user?.username || 'Unknown',
     previewImage: post.thumbnail || '',
     previewVideo: post.video || '',
-    downloadUrl: `${STEAM_DECK_REPO_BASE_URL}/post/download/${post.id}`,
+    downloadUrl: post.video || `${STEAM_DECK_REPO_BASE_URL}/post/download/${post.id}`,
     sourceUrl: post.url || `${STEAM_DECK_REPO_BASE_URL}/post/${post.id}`
   }
 }

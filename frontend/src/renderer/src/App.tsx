@@ -690,7 +690,7 @@ function App(): React.JSX.Element {
     if (!bootVideoPreviewItem) return
     setBootVideoDownloading(bootVideoPreviewItem.id)
     try {
-      const url = bootVideoPreviewItem.downloadUrl || `https://steamdeckrepo.com/post/download/${bootVideoPreviewItem.id}`
+    const url = bootVideoPreviewItem.downloadUrl || bootVideoPreviewItem.video || `https://steamdeckrepo.com/post/download/${bootVideoPreviewItem.id}`
       const result = await window.api.downloadBootVideo(url, type)
       if (result.success) {
         setBootVideoPaths((prev) => ({ ...prev, [type]: result.path || null }))
@@ -6169,7 +6169,7 @@ function App(): React.JSX.Element {
                                 disabled={bootVideoDownloading === video.id}
                                 onClick={async () => {
                                   setBootVideoDownloading(video.id)
-                                  const url = video.downloadUrl || `https://steamdeckrepo.com/post/download/${video.id}`
+                                  const url = video.downloadUrl || video.video || `https://steamdeckrepo.com/post/download/${video.id}`
                                   const result = await window.api.downloadBootVideo(url, 'boot')
                                   if (result.success) {
                                     setBootVideoPaths(prev => ({ ...prev, boot: result.path || null }))

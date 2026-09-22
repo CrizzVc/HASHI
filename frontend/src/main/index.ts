@@ -39,7 +39,18 @@ protocol.registerSchemesAsPrivileged([
 // Convierte una ruta absoluta del filesystem en una URL servible por el renderer
 // a través del protocolo `hashi-media://`.
 function toMediaUrl(absPath: string): string {
-  return `${MEDIA_PROTOCOL_SCHEME}://local-file/${encodeURIComponent(absPath)}`
+  // Cache-busting: si el archivo se vuelve a descargar con el mismo nombre
+  // (p.ej. boot.webm reemplazado por otro boot video), la URL sin versión
+  // sería idéntica a la anterior y el renderer podría servir la respuesta
+  // cacheada en vez del archivo nuevo. Anexar el mtime obliga a que cambie
+  // la URL cada vez que el archivo cambia.
+  let version = ''
+  try {
+    version = `?v=${Math.round(fs.statSync(absPath).mtimeMs)}`
+  } catch {
+    version = ''
+  }
+  return `${MEDIA_PROTOCOL_SCHEME}://local-file/${encodeURIComponent(absPath)}${version}`
 }
 import { translations } from '../renderer/src/translations'
 
@@ -982,7 +993,14 @@ app.whenReady().then(() => {
 
       // net.fetch sobre una file:// URL respeta Range headers, lo que permite
       // hacer seek en el <video> en vez de tener que cargarlo entero primero.
-      return await net.fetch(pathToFileURL(filePath).toString())
+      const fileResponse = await net.fetch(pathToFileURL(filePath).toString())
+      const headers = new Headers(fileResponse.headers)
+      headers.set('Cache-Control', 'no-store, must-revalidate')
+      return new Response(fileResponse.body, {
+        status: fileResponse.status,
+        statusText: fileResponse.statusText,
+        headers
+      })
     } catch (error) {
       console.error('[hashi-media] Error sirviendo archivo:', error)
       return new Response('Internal error', { status: 500 })
@@ -2329,11 +2347,44 @@ app.whenReady().then(() => {
         return { success: false, error: `SteamDeckRepo respondió ${response.status} ${response.statusText}` }
       }
 
+      // Validate that the response is actually a video file, not an HTML page
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('text/html')) {
+        return { success: false, error: 'La URL no devolvió un archivo de video (recibido HTML). Intente con otro video.' }
+      }
+
       const arrayBuffer = await response.arrayBuffer()
+
+      // Sanity check: a valid webm should be at least a few KB
+      if (arrayBuffer.byteLength < 1024) {
+        return { success: false, error: 'El archivo descargado es demasiado pequeño para ser un video válido.' }
+      }
+
       const destPath = join(splashDir, `${target}.webm`)
       const tmpPath = `${destPath}.tmp`
       fs.writeFileSync(tmpPath, Buffer.from(arrayBuffer))
-      fs.renameSync(tmpPath, destPath)
+
+      // On Windows the destination file may be locked by the renderer
+      // (hashi-media:// protocol handler keeps a handle open while the
+      // boot player video element is using it). Try several strategies:
+      try {
+        // Strategy 1: direct rename (works if destination doesn't exist or isn't locked)
+        fs.renameSync(tmpPath, destPath)
+      } catch (renameErr: any) {
+        if (renameErr.code === 'EPERM' || renameErr.code === 'EBUSY') {
+          try {
+            // Strategy 2: delete destination first, then rename
+            if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
+            fs.renameSync(tmpPath, destPath)
+          } catch {
+            // Strategy 3: copy over the locked file and clean up tmp
+            fs.copyFileSync(tmpPath, destPath)
+            try { fs.unlinkSync(tmpPath) } catch { /* ignore cleanup errors */ }
+          }
+        } else {
+          throw renameErr
+        }
+      }
 
       return { success: true, path: toMediaUrl(destPath) }
     } catch (error: any) {
