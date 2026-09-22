@@ -8,6 +8,7 @@ import * as fs from 'fs'
 import * as crypto from 'crypto'
 import { spawn, fork, execSync, type ChildProcess } from 'child_process'
 import * as http from 'http'
+import * as net from 'net'
 import { URL, pathToFileURL } from 'url'
 import { translations } from '../renderer/src/translations'
 
@@ -39,6 +40,36 @@ let tray: Tray | null = null
 
 // ── Backend Express server (proceso hijo) ──
 let backendProcess: ChildProcess | null = null
+let currentBackendPort = 3000
+
+function getBackendPortConfigPath(): string {
+  return join(app.getPath('userData'), 'backend-port.json')
+}
+
+function readBackendPort(): number {
+  try {
+    const raw = JSON.parse(fs.readFileSync(getBackendPortConfigPath(), 'utf8'))
+    if (typeof raw.port === 'number' && raw.port > 0 && raw.port < 65536) return raw.port
+  } catch { /* ignore */ }
+  return 3000
+}
+
+function saveBackendPort(port: number): void {
+  try {
+    fs.writeFileSync(getBackendPortConfigPath(), JSON.stringify({ port }, null, 2), 'utf8')
+  } catch { /* ignore */ }
+}
+
+function checkPortInUse(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = net.createServer()
+    server.once('error', () => resolve(true))
+    server.once('listening', () => {
+      server.close(() => resolve(false))
+    })
+    server.listen(port)
+  })
+}
 
 // ── Game session flag — suspende actividades durante gameplay ──
 let isGameRunning = false
@@ -346,18 +377,20 @@ function createTray(): void {
   })
 }
 
-function startBackend(): void {
+function startBackend(port?: number): void {
   if (is.dev) return // En dev se corre manualmente con "npm run dev" en backend/
 
   const backendDir = join(process.resourcesPath, 'backend')
   const scriptPath = join(backendDir, 'src', 'app.js')
+  const resolvedPort = port || readBackendPort()
+  currentBackendPort = resolvedPort
 
   try {
     backendProcess = fork(scriptPath, {
       cwd: backendDir,
       env: {
         ...process.env,
-        PORT: '3000'
+        PORT: String(resolvedPort)
       }
     })
 
@@ -370,7 +403,7 @@ function startBackend(): void {
       backendProcess = null
     })
 
-    console.log('[Backend] Started on port 3000')
+    console.log(`[Backend] Started on port ${resolvedPort}`)
   } catch (err: any) {
     console.error('[Backend] Failed to start:', err.message)
   }
@@ -382,6 +415,11 @@ function stopBackend(): void {
     backendProcess.kill()
     backendProcess = null
   }
+}
+
+function restartBackend(port: number): void {
+  stopBackend()
+  startBackend(port)
 }
 
 function getWindowsMediaSessionsModule(): any {
@@ -2177,6 +2215,30 @@ app.whenReady().then(() => {
   ipcMain.handle('control-system-media', async (_event, action: string, target: any) => {
     const norm = action === 'play' || action === 'pause' || action === 'toggle' ? 'play_pause' : action === 'previous' ? 'prev' : action
     return sendMediaControlAction(norm, target)
+  })
+
+  // ── Backend port management ──
+  ipcMain.handle('get-backend-port', () => {
+    return { port: currentBackendPort }
+  })
+
+  ipcMain.handle('set-backend-port', async (_event, port: number) => {
+    if (port < 1 || port > 65535) {
+      return { success: false, error: 'Invalid port number' }
+    }
+
+    const inUse = await checkPortInUse(port)
+    if (inUse) {
+      return { success: false, error: 'port_in_use' }
+    }
+
+    saveBackendPort(port)
+    restartBackend(port)
+    return { success: true }
+  })
+
+  ipcMain.handle('check-port-in-use', async (_event, port: number) => {
+    return { inUse: await checkPortInUse(port) }
   })
 
   startBackend()

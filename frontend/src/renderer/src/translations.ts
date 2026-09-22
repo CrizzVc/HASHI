@@ -226,6 +226,11 @@ export interface TranslationSchema {
   defaultStore: string
   omniconsoleTitle: string
   omniconsoleDesc: string
+  backendPort: string
+  backendPortDesc: string
+  portInUse: string
+  portChanged: string
+  backendRestarting: string
 
   // Settings - Customization Tab
   profileTitle: string
@@ -508,6 +513,11 @@ export const translations: Record<Language, TranslationSchema> = {
     defaultStore: 'Tienda por defecto',
     omniconsoleTitle: 'Omniconsole',
     omniconsoleDesc: 'Evita que el launcher se oculte al ejecutar juegos',
+    backendPort: 'Backend corriendo en',
+    backendPortDesc: 'Puerto del servidor backend',
+    portInUse: 'Este puerto ya está en uso',
+    portChanged: 'Puerto cambiado. Reiniciando backend...',
+    backendRestarting: 'Reiniciando backend...',
 
     profileTitle: 'Perfil',
     username: 'Nombre de usuario',
@@ -767,6 +777,11 @@ export const translations: Record<Language, TranslationSchema> = {
     defaultStore: 'Default store',
     omniconsoleTitle: 'Omniconsole',
     omniconsoleDesc: 'Prevents the launcher from hiding when launching games',
+    backendPort: 'Backend running on',
+    backendPortDesc: 'Backend server port',
+    portInUse: 'This port is already in use',
+    portChanged: 'Port changed. Restarting backend...',
+    backendRestarting: 'Restarting backend...',
 
     profileTitle: 'Profile',
     username: 'Username',

@@ -1,5 +1,6 @@
 import React from 'react';
 import VideoPlayer from './Player/VideoPlayer';
+import { getBackendUrl } from '../utils/backendUrl';
 
 export interface MediaItem {
   id: number;
@@ -38,11 +39,11 @@ const MediaDetailView: React.FC<MediaDetailViewProps> = ({ item, onClose }) => {
   // ── Data fetching ──────────────────────────────────────────────────────────
   React.useEffect(() => {
     const controller = new AbortController();
-    void fetch(`http://localhost:3000/api/tmdb/backdrop?query=${encodeURIComponent(item.title)}`, { signal: controller.signal })
+    void fetch(`${getBackendUrl()}/api/tmdb/backdrop?query=${encodeURIComponent(item.title)}`, { signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
       .then((data: { backdrop?: string | null } | null) => setBackdrop(data?.backdrop || null))
       .catch(() => undefined);
-    void fetch(`http://localhost:3000/api/fanart/logo?query=${encodeURIComponent(item.title)}`, { signal: controller.signal })
+    void fetch(`${getBackendUrl()}/api/fanart/logo?query=${encodeURIComponent(item.title)}`, { signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
       .then((data: { logo?: string | null } | null) => setLogo(data?.logo ?? null))
       .catch(() => setLogo(null));

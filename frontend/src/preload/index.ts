@@ -87,6 +87,10 @@ const api = {
   },
   // Omniconsole — prevent launcher from hiding when a game is launched
   setOmniconsole: (enabled: boolean) => ipcRenderer.invoke('set-omniconsole', enabled),
+  // Backend port management
+  getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
+  setBackendPort: (port: number) => ipcRenderer.invoke('set-backend-port', port),
+  checkPortInUse: (port: number) => ipcRenderer.invoke('check-port-in-use', port),
   // Window control — minimizeWindow oculta sin cerrar; quitApp cierra de verdad
   minimizeWindow: () => ipcRenderer.invoke('minimize-window'),
   quitApp: () => ipcRenderer.invoke('quit-app')

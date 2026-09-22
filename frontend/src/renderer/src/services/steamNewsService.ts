@@ -1,4 +1,4 @@
-const BACKEND_URL = 'http://localhost:3000'
+import { getBackendUrl } from '../utils/backendUrl'
 
 export interface SteamNewsItem {
     gid: string
@@ -21,7 +21,7 @@ export interface SteamNewsItem {
 export const searchSteamAppId = async (gameName: string): Promise<number | null> => {
     try {
         const response = await fetch(
-            `${BACKEND_URL}/api/steam/resolve?term=${encodeURIComponent(gameName)}&lang=es`
+            `${getBackendUrl()}/api/steam/resolve?term=${encodeURIComponent(gameName)}&lang=es`
         )
         if (!response.ok) return null
         const data = await response.json()
@@ -40,7 +40,7 @@ export const searchSteamAppId = async (gameName: string): Promise<number | null>
  */
 export const fetchSteamNewsForApp = async (appid: number): Promise<SteamNewsItem[]> => {
     try {
-        const response = await fetch(`${BACKEND_URL}/api/steam/news/${appid}?count=10&lang=es`)
+        const response = await fetch(`${getBackendUrl()}/api/steam/news/${appid}?count=10&lang=es`)
         if (!response.ok) return []
         const data = await response.json()
         return Array.isArray(data?.news) ? data.news : []

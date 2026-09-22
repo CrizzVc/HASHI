@@ -24,6 +24,7 @@ import {
 } from './components/Icons'
 
 import { translations, Language, t as tInterp } from './translations'
+import { getBackendUrl } from './utils/backendUrl'
 
 import MusicPlayer from './components/MusicPlayer'
 import NotificationContainer from './components/NotificationContainer'
@@ -288,7 +289,6 @@ const GAME_COLORS = [
   '#a3a3a3', '#737373', '#525252', '#e5e7eb', '#78716c'
 ]
 
-const BACKEND_URL = 'http://localhost:3000'
 const RECENT_GAMES_LIMIT = 15
 const STEAM_ARTWORK_STORAGE_KEY = 'gbl-steam-artwork'
 const DEFAULT_STORE_STORAGE_KEY = 'gbl-default-store'
@@ -382,14 +382,14 @@ function formatPlaytime(minutes: number): string {
 
 async function fetchAutoArtworkUrl(appName: string): Promise<string | null> {
   try {
-    const searchRes = await fetch(`${BACKEND_URL}/api/steamgrid/search?term=${encodeURIComponent(appName)}`)
+    const searchRes = await fetch(`${getBackendUrl()}/api/steamgrid/search?term=${encodeURIComponent(appName)}`)
     if (!searchRes.ok) return null
 
     const searchData = await searchRes.json()
     if (!Array.isArray(searchData) || searchData.length === 0) return null
 
     const gameId = searchData[0].id
-    const squareGridsRes = await fetch(`${BACKEND_URL}/api/steamgrid/square_grids/${gameId}`)
+    const squareGridsRes = await fetch(`${getBackendUrl()}/api/steamgrid/square_grids/${gameId}`)
     if (squareGridsRes.ok) {
       const squareGrids = await squareGridsRes.json()
       if (Array.isArray(squareGrids) && squareGrids.length > 0 && squareGrids[0].url) {
@@ -620,11 +620,23 @@ function App(): React.JSX.Element {
   const [omniconsole, setOmniconsole] = useState<boolean>(() => {
     try { return localStorage.getItem(OMNICONSOLE_STORAGE_KEY) === 'true' } catch { return false }
   })
+  const [backendPort, setBackendPort] = useState<number>(3000)
+  const [portError, setPortError] = useState<string | null>(null)
 
   // Obtener la versión dinámica de la app
   useEffect(() => {
     window.api?.getAppVersion?.().then((ver) => {
       if (ver) setAppVersion(ver)
+    }).catch(() => {})
+  }, [])
+
+  // Load backend port on startup
+  useEffect(() => {
+    window.api?.getBackendPort?.().then((data) => {
+      if (data?.port) {
+        setBackendPort(data.port)
+        try { localStorage.setItem('gbl-backend-port', String(data.port)) } catch {}
+      }
     }).catch(() => {})
   }, [])
 
@@ -736,7 +748,7 @@ function App(): React.JSX.Element {
     if (nativeView !== 'multimedia' || multimediaExtensionId !== 'animeav1') return
 
     const controller = new AbortController()
-    void fetch('http://localhost:3000/api/animeav1/latest', { signal: controller.signal })
+    void fetch(`${getBackendUrl()}/api/animeav1/latest`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error(`AnimeAV1 respondió con ${response.status}`)
         return response.json() as Promise<{ success?: boolean; data?: Array<{ title?: string; episode?: string; posterImage?: string | null; episodeImage?: string | null; animeUrl?: string | null }> }>
@@ -1446,7 +1458,7 @@ function App(): React.JSX.Element {
         steamId: steamAccount.steamId
       })
 
-      const res = await fetch(`${BACKEND_URL}/api/steam/library?${query.toString()}`)
+      const res = await fetch(`${getBackendUrl()}/api/steam/library?${query.toString()}`)
       if (!res.ok) return
       const games = await res.json()
       const normalizedGames = (Array.isArray(games) ? games : []).map((game: SteamLibraryGame) => ({
@@ -1519,7 +1531,7 @@ function App(): React.JSX.Element {
         steamId: steamAccount.steamId
       })
 
-      const res = await fetch(`${BACKEND_URL}/api/steam/friends?${query.toString()}`)
+      const res = await fetch(`${getBackendUrl()}/api/steam/friends?${query.toString()}`)
       if (!res.ok) {
         setSteamFriends([])
         return
@@ -1568,7 +1580,7 @@ function App(): React.JSX.Element {
 
     let cancelled = false
     setSelectedFriendBackground(null)
-    fetch(`${BACKEND_URL}/api/steam/friends/${selectedFriend.steamid}/background`)
+    fetch(`${getBackendUrl()}/api/steam/friends/${selectedFriend.steamid}/background`)
       .then((response) => response.ok ? response.json() : null)
       .then((data: { background?: string | null } | null) => {
         if (!cancelled) setSelectedFriendBackground(data?.background || null)
@@ -1704,7 +1716,7 @@ function App(): React.JSX.Element {
         let appid = detailGame.steamAppId
         if (!appid) {
           const resolveRes = await fetch(
-            `${BACKEND_URL}/api/steam/resolve?term=${encodeURIComponent(detailGame.name)}&lang=${language}`
+            `${getBackendUrl()}/api/steam/resolve?term=${encodeURIComponent(detailGame.name)}&lang=${language}`
           )
           if (!resolveRes.ok) return
           const resolved = await resolveRes.json()
@@ -1717,8 +1729,8 @@ function App(): React.JSX.Element {
         )
 
         const [shotsRes, detailsRes] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/steam/screenshots/${appid}?lang=${language}`),
-          fetch(`${BACKEND_URL}/api/steam/details/${appid}?lang=${language}`)
+          fetch(`${getBackendUrl()}/api/steam/screenshots/${appid}?lang=${language}`),
+          fetch(`${getBackendUrl()}/api/steam/details/${appid}?lang=${language}`)
         ])
 
         if (!cancelled && shotsRes.ok) {
@@ -1744,7 +1756,7 @@ function App(): React.JSX.Element {
             })
             if (steamIdParam) achParams.set('steamId', steamIdParam)
             const achRes = await fetch(
-              `${BACKEND_URL}/api/steam/achievements?${achParams.toString()}`
+              `${getBackendUrl()}/api/steam/achievements?${achParams.toString()}`
             )
             if (!cancelled && achRes.ok) {
               const achData = await achRes.json()
@@ -1977,7 +1989,7 @@ function App(): React.JSX.Element {
 
     // Auto-fetch artwork
     try {
-      const searchRes = await fetch(`${BACKEND_URL}/api/steamgrid/search?term=${encodeURIComponent(newGame.name)}`)
+      const searchRes = await fetch(`${getBackendUrl()}/api/steamgrid/search?term=${encodeURIComponent(newGame.name)}`)
       if (searchRes.ok) {
         const searchData = await searchRes.json()
         if (Array.isArray(searchData) && searchData.length > 0) {
@@ -1985,10 +1997,10 @@ function App(): React.JSX.Element {
           newGame.steamGridId = gameId
 
           const [squareGridsRes, gridsRes, heroesRes, logosRes] = await Promise.all([
-            fetch(`${BACKEND_URL}/api/steamgrid/square_grids/${gameId}`),
-            fetch(`${BACKEND_URL}/api/steamgrid/grids/${gameId}`),
-            fetch(`${BACKEND_URL}/api/steamgrid/heroes/${gameId}`),
-            fetch(`${BACKEND_URL}/api/steamgrid/logos/${gameId}`)
+            fetch(`${getBackendUrl()}/api/steamgrid/square_grids/${gameId}`),
+            fetch(`${getBackendUrl()}/api/steamgrid/grids/${gameId}`),
+            fetch(`${getBackendUrl()}/api/steamgrid/heroes/${gameId}`),
+            fetch(`${getBackendUrl()}/api/steamgrid/logos/${gameId}`)
           ])
 
           if (squareGridsRes.ok) {
@@ -2439,7 +2451,7 @@ function App(): React.JSX.Element {
     setSgdbSelectedGame(null)
     setSgdbImages([])
     try {
-      const res = await fetch(`${BACKEND_URL}/api/steamgrid/search?term=${encodeURIComponent(sgdbSearch.trim())}`)
+      const res = await fetch(`${getBackendUrl()}/api/steamgrid/search?term=${encodeURIComponent(sgdbSearch.trim())}`)
       if (!res.ok) throw new Error('Error buscando en SteamGridDB')
       const data = await res.json()
       setSgdbResults(Array.isArray(data) ? data : [])
@@ -2455,7 +2467,7 @@ function App(): React.JSX.Element {
     setSgdbImagesLoading(true)
     setSgdbImages([])
     try {
-      const res = await fetch(`${BACKEND_URL}/api/steamgrid/${sgdbArtType}/${game.id}`)
+      const res = await fetch(`${getBackendUrl()}/api/steamgrid/${sgdbArtType}/${game.id}`)
       if (!res.ok) throw new Error('Error obteniendo imágenes')
       const data = await res.json()
       setSgdbImages(Array.isArray(data) ? data : [])
@@ -2472,7 +2484,7 @@ function App(): React.JSX.Element {
     setSgdbImagesLoading(true)
     setSgdbImages([])
     try {
-      const res = await fetch(`${BACKEND_URL}/api/steamgrid/${type}/${sgdbSelectedGame.id}`)
+      const res = await fetch(`${getBackendUrl()}/api/steamgrid/${type}/${sgdbSelectedGame.id}`)
       if (!res.ok) throw new Error('Error obteniendo imágenes')
       const data = await res.json()
       setSgdbImages(Array.isArray(data) ? data : [])
@@ -5620,6 +5632,32 @@ function App(): React.JSX.Element {
                           {t.unlink}
                         </button>
                       </div>
+                    )}
+
+                    <div className="settings-other-row">
+                      <span className="settings-other-label">{t.backendPort}</span>
+                      <select
+                        className="settings-other-select"
+                        value={backendPort}
+                        onChange={async (e) => {
+                          const newPort = Number(e.target.value)
+                          setPortError(null)
+                          const result = await window.api?.setBackendPort?.(newPort)
+                          if (result?.success) {
+                            setBackendPort(newPort)
+                            try { localStorage.setItem('gbl-backend-port', String(newPort)) } catch {}
+                          } else if (result?.error === 'port_in_use') {
+                            setPortError(t.portInUse)
+                          }
+                        }}
+                      >
+                        {Array.from({ length: 10 }, (_, i) => 3000 + i).map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {portError && (
+                      <div className="settings-port-error">{portError}</div>
                     )}
                   </div>
 

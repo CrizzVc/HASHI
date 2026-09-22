@@ -1,4 +1,5 @@
 import React from 'react';
+import { getBackendUrl } from '../utils/backendUrl';
 
 interface HeroItem {
   id: number;
@@ -71,7 +72,7 @@ const MultimediaView: React.FC<MultimediaViewProps> = ({
 
     const controller = new AbortController();
     setSelectedBackdrop(null);
-    void fetch(`http://localhost:3000/api/tmdb/backdrop?query=${encodeURIComponent(selectedAnime.title)}`, { signal: controller.signal })
+    void fetch(`${getBackendUrl()}/api/tmdb/backdrop?query=${encodeURIComponent(selectedAnime.title)}`, { signal: controller.signal })
       .then((response) => response.ok ? response.json() : null)
       .then((data: { backdrop?: string | null } | null) => setSelectedBackdrop(data?.backdrop || null))
       .catch((error: unknown) => {

@@ -126,6 +126,10 @@ declare global {
       onMediaSessionsChanged: (callback: (sessions: any[]) => void) => () => void
       // Omniconsole
       setOmniconsole: (enabled: boolean) => Promise<void>
+      // Backend port management
+      getBackendPort: () => Promise<{ port: number }>
+      setBackendPort: (port: number) => Promise<{ success: boolean; error?: string }>
+      checkPortInUse: (port: number) => Promise<{ inUse: boolean }>
       // Window control
       minimizeWindow: () => Promise<void>
       quitApp: () => Promise<void>

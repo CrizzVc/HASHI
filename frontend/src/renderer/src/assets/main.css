@@ -2467,9 +2467,9 @@
   justify-content: space-between;
   padding: 10px 14px;
   background: rgba(255, 255, 255, 0.04);
-  /* border: 1px solid rgba(255, 255, 255, 0.08); */
   border-radius: 10px;
   margin-bottom: 15px;
+  margin-top: 10px;
 }
 
 .settings-other-label {
@@ -2502,6 +2502,14 @@
 .settings-other-select option {
   background: #1a1a1e;
   color: #fff;
+}
+
+.settings-port-error {
+  color: #ef4444;
+  font-size: 11px;
+  padding: 6px 14px;
+  margin-top: -8px;
+  margin-bottom: 15px;
 }
 
 /* ── Omniconsole Toggle Switch ── */
@@ -7646,10 +7654,12 @@
   text-align: center;
 }
 
-@media (max-width: 1100px), (max-height: 768px) {
+@media (max-width: 1100px),
+(max-height: 768px) {
   .trophies-cover {
     width: clamp(100px, 11vw, 150px);
   }
+
   .trophy-card-desc {
     display: none;
   }
