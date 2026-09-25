@@ -992,10 +992,15 @@ app.whenReady().then(() => {
       }
 
       // net.fetch sobre una file:// URL respeta Range headers, lo que permite
-      // hacer seek en el <video> en vez de tener que cargarlo entero primero.
-      const fileResponse = await net.fetch(pathToFileURL(filePath).toString())
+      // hacer seek en el <video> y calcular su duración correctamente.
+      const fileResponse = await net.fetch(pathToFileURL(filePath).toString(), {
+        headers: request.headers
+      })
       const headers = new Headers(fileResponse.headers)
       headers.set('Cache-Control', 'no-store, must-revalidate')
+      if (filePath.endsWith('.webm') && !headers.get('Content-Type')) {
+        headers.set('Content-Type', 'video/webm')
+      }
       return new Response(fileResponse.body, {
         status: fileResponse.status,
         statusText: fileResponse.statusText,

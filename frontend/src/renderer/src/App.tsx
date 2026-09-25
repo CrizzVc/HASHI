@@ -649,7 +649,20 @@ function App(): React.JSX.Element {
   const [bootVideoReloadKey, setBootVideoReloadKey] = useState(0)
   const [bootVideoFailed, setBootVideoFailed] = useState(false)
   const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
+  const bootVideoLastTimeRef = useRef<number>(0)
   const [replayHomeEntrance, setReplayHomeEntrance] = useState(false)
+
+  const dismissBootPlayer = useCallback(() => {
+    const videoEl = bootPlayerVideoRef.current
+    if (videoEl) {
+      try {
+        videoEl.pause()
+      } catch {}
+    }
+    setShowBootPlayer(false)
+    setBootPlayerVideoPath(null)
+    setReplayHomeEntrance(true)
+  }, [])
 
   // Listen to boot video download progress
   useEffect(() => {
@@ -701,9 +714,11 @@ function App(): React.JSX.Element {
     const videoEl = bootPlayerVideoRef.current
     if (!videoEl) return
 
+    bootVideoLastTimeRef.current = 0
     videoEl.currentTime = 0
     videoEl.volume = 1
     videoEl.muted = false
+    videoEl.loop = false
 
     const tryPlay = (): void => {
       const playPromise = videoEl.play()
@@ -718,9 +733,7 @@ function App(): React.JSX.Element {
             })
             .catch(() => {
               setBootVideoFailed(true)
-              setShowBootPlayer(false)
-              setBootPlayerVideoPath(null)
-              setReplayHomeEntrance(true)
+              dismissBootPlayer()
             })
         })
       }
@@ -730,15 +743,16 @@ function App(): React.JSX.Element {
 
     // Safety timer: if video doesn't finish within 20 seconds, dismiss automatically
     const safetyTimer = setTimeout(() => {
-      if (showBootPlayer) {
-        setShowBootPlayer(false)
-        setBootPlayerVideoPath(null)
-        setReplayHomeEntrance(true)
-      }
+      dismissBootPlayer()
     }, 20000)
 
-    return () => clearTimeout(safetyTimer)
-  }, [showBootPlayer, bootPlayerVideoPath, bootVideoReloadKey, bootVideoFailed])
+    return () => {
+      clearTimeout(safetyTimer)
+      try {
+        videoEl.pause()
+      } catch {}
+    }
+  }, [showBootPlayer, bootPlayerVideoPath, bootVideoReloadKey, bootVideoFailed, dismissBootPlayer])
 
   // ── Aplicar el video previsualizado como boot o suspend ──
   const handleApplyPreviewAs = useCallback(async (type: 'boot' | 'suspend') => {
@@ -6312,7 +6326,7 @@ function App(): React.JSX.Element {
       {showBootPlayer && bootPlayerVideoPath && !bootVideoFailed && (
         <div
           className="boot-player-overlay"
-          onClick={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
+          onClick={dismissBootPlayer}
         >
           <video
             ref={bootPlayerVideoRef}
@@ -6321,23 +6335,41 @@ function App(): React.JSX.Element {
             className="boot-player-video"
             playsInline
             preload="auto"
+            loop={false}
+            onTimeUpdate={(e) => {
+              const vid = e.currentTarget
+              const current = vid.currentTime
+              const duration = vid.duration
+
+              // Dismiss immediately if at or near the end of video duration
+              if (duration && isFinite(duration) && duration > 0 && current >= duration - 0.15) {
+                dismissBootPlayer()
+                return
+              }
+
+              // Dismiss if browser restarted/looped the video
+              if (bootVideoLastTimeRef.current > 0.8 && current < 0.3) {
+                dismissBootPlayer()
+                return
+              }
+
+              bootVideoLastTimeRef.current = current
+            }}
             onError={() => {
               console.warn('Boot video failed to load/play, retrying or skipping.');
               if (bootVideoReloadKey < 2) {
                 setBootVideoReloadKey((current) => current + 1)
               } else {
                 setBootVideoFailed(true)
-                setShowBootPlayer(false)
-                setBootPlayerVideoPath(null)
-                setReplayHomeEntrance(true)
+                dismissBootPlayer()
               }
             }}
-            onEnded={() => { setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
+            onEnded={dismissBootPlayer}
           />
           <button
             type="button"
             className="boot-player-skip"
-            onClick={(e) => { e.stopPropagation(); setShowBootPlayer(false); setBootPlayerVideoPath(null); setReplayHomeEntrance(true) }}
+            onClick={(e) => { e.stopPropagation(); dismissBootPlayer() }}
           >
             {t.close || 'Skip'} ✕
           </button>
@@ -6360,6 +6392,7 @@ function App(): React.JSX.Element {
               controls
               autoPlay
               playsInline
+              loop={false}
             />
             {bootVideoPreviewItem && (
               <div className="boot-video-preview-footer">
