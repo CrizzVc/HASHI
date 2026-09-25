@@ -93,8 +93,13 @@ const api = {
   checkPortInUse: (port: number) => ipcRenderer.invoke('check-port-in-use', port),
   // Boot video management
   getBootVideoPath: () => ipcRenderer.invoke('get-boot-video-path'),
-  downloadBootVideo: (url: string, target: string) => ipcRenderer.invoke('download-boot-video', url, target),
+  downloadBootVideo: (url: string, target: string, videoId?: string) => ipcRenderer.invoke('download-boot-video', url, target, videoId),
   deleteBootVideo: (target: string) => ipcRenderer.invoke('delete-boot-video', target),
+  onBootVideoProgress: (callback: (data: { target: string; percent: number; receivedBytes: number; totalBytes: number; videoId?: string }) => void) => {
+    const sub = (_event: any, data: any) => callback(data)
+    ipcRenderer.on('boot-video-progress', sub)
+    return () => ipcRenderer.removeListener('boot-video-progress', sub)
+  },
   // SteamDeckRepo API (routed through main process to avoid CSP)
   fetchSteamDeckRepoPosts: () => ipcRenderer.invoke('steamdeckrepo-fetch-posts'),
   // Window control — minimizeWindow oculta sin cerrar; quitApp cierra de verdad

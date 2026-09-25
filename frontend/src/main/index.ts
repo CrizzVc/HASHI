@@ -2328,7 +2328,7 @@ app.whenReady().then(() => {
     }
   })
 
-  ipcMain.handle('download-boot-video', async (_event, url: string, target: string) => {
+  ipcMain.handle('download-boot-video', async (event, url: string, target: string, videoId?: string) => {
     try {
       if (target !== 'boot' && target !== 'suspend') {
         return { success: false, error: `Target inválido: ${target}` }
@@ -2342,6 +2342,9 @@ app.whenReady().then(() => {
         fs.mkdirSync(splashDir, { recursive: true })
       }
 
+      // Initial progress: 0%
+      event.sender.send('boot-video-progress', { target, percent: 0, receivedBytes: 0, totalBytes: 0, videoId })
+
       const response = await fetch(url)
       if (!response.ok) {
         return { success: false, error: `SteamDeckRepo respondió ${response.status} ${response.statusText}` }
@@ -2353,38 +2356,78 @@ app.whenReady().then(() => {
         return { success: false, error: 'La URL no devolvió un archivo de video (recibido HTML). Intente con otro video.' }
       }
 
-      const arrayBuffer = await response.arrayBuffer()
-
-      // Sanity check: a valid webm should be at least a few KB
-      if (arrayBuffer.byteLength < 1024) {
-        return { success: false, error: 'El archivo descargado es demasiado pequeño para ser un video válido.' }
-      }
+      const contentLengthHeader = response.headers.get('content-length')
+      const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0
 
       const destPath = join(splashDir, `${target}.webm`)
       const tmpPath = `${destPath}.tmp`
-      fs.writeFileSync(tmpPath, Buffer.from(arrayBuffer))
 
-      // On Windows the destination file may be locked by the renderer
-      // (hashi-media:// protocol handler keeps a handle open while the
-      // boot player video element is using it). Try several strategies:
+      // Stream the download chunk by chunk to report progress and write to tmpPath
+      if (response.body) {
+        const fileStream = fs.createWriteStream(tmpPath)
+        const reader = (response.body as any).getReader ? (response.body as any).getReader() : null
+        let receivedBytes = 0
+
+        if (reader) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              if (value) {
+                const buffer = Buffer.from(value)
+                fileStream.write(buffer)
+                receivedBytes += buffer.length
+                const percent = totalBytes > 0 ? Math.min(99, Math.round((receivedBytes / totalBytes) * 100)) : 0
+                event.sender.send('boot-video-progress', { target, percent, receivedBytes, totalBytes, videoId })
+              }
+            }
+          } finally {
+            await new Promise<void>((resolve) => fileStream.end(resolve))
+          }
+        } else {
+          for await (const chunk of (response.body as any)) {
+            const buffer = Buffer.from(chunk)
+            fileStream.write(buffer)
+            receivedBytes += buffer.length
+            const percent = totalBytes > 0 ? Math.min(99, Math.round((receivedBytes / totalBytes) * 100)) : 0
+            event.sender.send('boot-video-progress', { target, percent, receivedBytes, totalBytes, videoId })
+          }
+          await new Promise<void>((resolve) => fileStream.end(resolve))
+        }
+
+        // Sanity check: valid file should be at least 1KB
+        if (receivedBytes < 1024) {
+          try { fs.unlinkSync(tmpPath) } catch {}
+          return { success: false, error: 'El archivo descargado es demasiado pequeño para ser un video válido.' }
+        }
+      } else {
+        const arrayBuffer = await response.arrayBuffer()
+        if (arrayBuffer.byteLength < 1024) {
+          return { success: false, error: 'El archivo descargado es demasiado pequeño para ser un video válido.' }
+        }
+        fs.writeFileSync(tmpPath, Buffer.from(arrayBuffer))
+      }
+
+      // Rename / replace destination file safely
       try {
-        // Strategy 1: direct rename (works if destination doesn't exist or isn't locked)
+        if (fs.existsSync(destPath)) {
+          try { fs.unlinkSync(destPath) } catch {}
+        }
         fs.renameSync(tmpPath, destPath)
       } catch (renameErr: any) {
         if (renameErr.code === 'EPERM' || renameErr.code === 'EBUSY') {
           try {
-            // Strategy 2: delete destination first, then rename
-            if (fs.existsSync(destPath)) fs.unlinkSync(destPath)
-            fs.renameSync(tmpPath, destPath)
-          } catch {
-            // Strategy 3: copy over the locked file and clean up tmp
             fs.copyFileSync(tmpPath, destPath)
-            try { fs.unlinkSync(tmpPath) } catch { /* ignore cleanup errors */ }
+            try { fs.unlinkSync(tmpPath) } catch { }
+          } catch (copyErr) {
+            throw copyErr
           }
         } else {
           throw renameErr
         }
       }
+
+      event.sender.send('boot-video-progress', { target, percent: 100, receivedBytes: totalBytes, totalBytes, videoId })
 
       return { success: true, path: toMediaUrl(destPath) }
     } catch (error: any) {

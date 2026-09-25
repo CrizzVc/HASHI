@@ -252,6 +252,9 @@ export interface TranslationSchema {
   bootVideoBy: string
   bootVideoLikes: string
   bootVideoDownloads: string
+  bootVideoDownloadSuccess: string
+  bootVideoDownloadSuccessDesc: string
+  bootVideoDownloading: string
 
   // Settings - Customization Tab
   profileTitle: string
@@ -278,7 +281,6 @@ export interface TranslationSchema {
   deleteGameSubtitle1: string
   deleteGameSubtitle2: string
   deleteBtnLibrary: string
-
 
   // Settings - Help Tab
   helpTitle: string
@@ -559,6 +561,9 @@ export const translations: Record<Language, TranslationSchema> = {
     bootVideoBy: 'por',
     bootVideoLikes: 'likes',
     bootVideoDownloads: 'descargas',
+    bootVideoDownloadSuccess: 'Video de arranque descargado',
+    bootVideoDownloadSuccessDesc: 'El video se ha descargado con éxito y se configuró como arranque',
+    bootVideoDownloading: 'Descargando...',
 
     profileTitle: 'Perfil',
     username: 'Nombre de usuario',
@@ -754,8 +759,6 @@ export const translations: Record<Language, TranslationSchema> = {
     steamLoginFailedDesc1: 'The authentication was not completed.',
     steamLoginFailedDesc2: 'Try again.',
 
-
-
     noMusicPlaying: 'No music playing',
     noMusicPlayingDesc: 'Play in Spotify/YouTube',
     controllingSystem: 'Controlling system',
@@ -843,6 +846,9 @@ export const translations: Record<Language, TranslationSchema> = {
     bootVideoBy: 'by',
     bootVideoLikes: 'likes',
     bootVideoDownloads: 'downloads',
+    bootVideoDownloadSuccess: 'Boot video downloaded',
+    bootVideoDownloadSuccessDesc: 'The video was downloaded successfully and set as boot video',
+    bootVideoDownloading: 'Downloading...',
 
     profileTitle: 'Profile',
     username: 'Username',
@@ -879,4 +885,3 @@ export const translations: Record<Language, TranslationSchema> = {
     addYourFirstGame: 'Add your first game to get started'
   }
 }
-

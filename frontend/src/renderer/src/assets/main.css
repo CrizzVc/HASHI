@@ -8152,3 +8152,109 @@
   opacity: 0;
   transform: translateY(24px);
 }
+
+/* ── Boot Video Progress Bar & Overlays ── */
+.boot-video-progress-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 10, 18, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  gap: 8px;
+  z-index: 5;
+  border-radius: 8px;
+}
+
+.boot-video-progress-bar-wrap {
+  width: 85%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.boot-video-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f2263f, #ff6b81);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+  box-shadow: 0 0 8px rgba(242, 38, 63, 0.6);
+}
+
+.boot-video-progress-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 85%;
+  font-size: 11px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.boot-video-progress-label {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 10.5px;
+}
+
+.boot-video-progress-percent {
+  color: #ff6b81;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.boot-video-preview-progress-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 220px;
+}
+
+/* ── Boot Video Notification Card ── */
+.notification-card-bootvideo {
+  border-left: 3px solid #f2263f;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.notification-card-bootvideo:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 36px rgba(242, 38, 63, 0.25), 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.notification-avatar-bootvideo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(242, 38, 63, 0.1);
+  width: 90px;
+  overflow: hidden;
+}
+
+.notification-avatar-bootvideo .notification-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.notification-bootvideo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.notification-bootvideo-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #ff5e73;
+  background: rgba(242, 38, 63, 0.15);
+  border: 1px solid rgba(242, 38, 63, 0.35);
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}

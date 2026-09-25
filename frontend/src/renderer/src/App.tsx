@@ -29,6 +29,7 @@ import { getBackendUrl } from './utils/backendUrl'
 import MusicPlayer from './components/MusicPlayer'
 import NotificationContainer from './components/NotificationContainer'
 import DownloadCompleteNotification from './components/DownloadCompleteNotification'
+import BootVideoNotification, { BootVideoNotificationData } from './components/BootVideoNotification'
 import UpdateNotification, { UpdateNotificationData } from './components/UpdateNotification'
 import { DownloadsModal } from './components/DownloadsModal'
 import { ModalHelper } from './components/ModalHelper'
@@ -635,12 +636,32 @@ function App(): React.JSX.Element {
   const [bootVideoPreview, setBootVideoPreview] = useState<string | null>(null)
   const [bootVideoPreviewItem, setBootVideoPreviewItem] = useState<any>(null)
   const [bootVideoDownloading, setBootVideoDownloading] = useState<string | null>(null)
+  const [bootVideoDownloadState, setBootVideoDownloadState] = useState<{
+    id: string
+    title: string
+    thumbnail?: string | null
+    target: 'boot' | 'suspend'
+    percent: number
+  } | null>(null)
+  const [bootVideoNotifications, setBootVideoNotifications] = useState<BootVideoNotificationData[]>([])
   const [showBootPlayer, setShowBootPlayer] = useState(false)
   const [bootPlayerVideoPath, setBootPlayerVideoPath] = useState<string | null>(null)
   const [bootVideoReloadKey, setBootVideoReloadKey] = useState(0)
   const [bootVideoFailed, setBootVideoFailed] = useState(false)
   const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
   const [replayHomeEntrance, setReplayHomeEntrance] = useState(false)
+
+  // Listen to boot video download progress
+  useEffect(() => {
+    if (!window.api?.onBootVideoProgress) return
+    const unsub = window.api.onBootVideoProgress((data) => {
+      setBootVideoDownloadState((prev) => {
+        if (!prev) return null
+        return { ...prev, percent: data.percent }
+      })
+    })
+    return unsub
+  }, [])
 
   // Re-trigger homeEntrance animations after boot video finishes
   useEffect(() => {
@@ -722,17 +743,44 @@ function App(): React.JSX.Element {
   // ── Aplicar el video previsualizado como boot o suspend ──
   const handleApplyPreviewAs = useCallback(async (type: 'boot' | 'suspend') => {
     if (!bootVideoPreviewItem) return
-    setBootVideoDownloading(bootVideoPreviewItem.id)
+    const item = bootVideoPreviewItem
+    const videoId = String(item.id)
+    const videoTitle = item.title || (type === 'suspend' ? 'Suspend Video' : 'Boot Video')
+    const videoThumb = item.thumbnail || null
+
+    setBootVideoDownloading(videoId)
+    setBootVideoDownloadState({
+      id: videoId,
+      title: videoTitle,
+      thumbnail: videoThumb,
+      target: type,
+      percent: 0
+    })
+
+    // Close preview modal so user immediately sees download progress in the UI
+    setBootVideoPreview(null)
+    setBootVideoPreviewItem(null)
+
     try {
-    const url = bootVideoPreviewItem.downloadUrl || bootVideoPreviewItem.video || `https://steamdeckrepo.com/post/download/${bootVideoPreviewItem.id}`
-      const result = await window.api.downloadBootVideo(url, type)
+      const url = item.downloadUrl || item.video || `https://steamdeckrepo.com/post/download/${item.id}`
+      const result = await window.api.downloadBootVideo(url, type, videoId)
       if (result.success) {
         setBootVideoPaths((prev) => ({ ...prev, [type]: result.path || null }))
+        setBootVideoNotifications((prev) => [
+          ...prev,
+          {
+            id: `bootvideo-${videoId}-${Date.now()}`,
+            title: videoTitle,
+            thumbnail: videoThumb,
+            target: type
+          }
+        ])
       }
+    } catch (err) {
+      console.error('Failed to download boot video:', err)
     } finally {
       setBootVideoDownloading(null)
-      setBootVideoPreview(null)
-      setBootVideoPreviewItem(null)
+      setBootVideoDownloadState(null)
     }
   }, [bootVideoPreviewItem])
 
@@ -6133,8 +6181,22 @@ function App(): React.JSX.Element {
                           <PlayIcon size={18} />
                           <span>{t.bootVideoActive}</span>
                         </div>
-                        <div className="boot-video-active-preview">
+                        <div className="boot-video-active-preview" style={{ position: 'relative' }}>
                           <video src={bootVideoPaths.boot} className="boot-video-preview-thumb" muted />
+                          {bootVideoDownloadState?.target === 'boot' && (
+                            <div className="boot-video-progress-overlay">
+                              <div className="boot-video-progress-info">
+                                <span className="boot-video-progress-label">{t.bootVideoDownloading}</span>
+                                <span className="boot-video-progress-percent">{bootVideoDownloadState.percent}%</span>
+                              </div>
+                              <div className="boot-video-progress-bar-wrap">
+                                <div
+                                  className="boot-video-progress-bar-fill"
+                                  style={{ width: `${Math.max(4, bootVideoDownloadState.percent)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                         <button
                           type="button"
@@ -6179,15 +6241,30 @@ function App(): React.JSX.Element {
                             <div key={video.id} className="boot-video-card">
                               <div className="boot-video-thumb-wrapper">
                                 <img src={video.thumbnail} alt={video.title} className="boot-video-thumb" />
-                                <div className="boot-video-thumb-overlay">
-                                  <button
-                                    type="button"
-                                    className="boot-video-play-btn"
-                                    onClick={() => { setBootVideoPreview(video.previewVideo || video.video); setBootVideoPreviewItem(video) }}
-                                  >
-                                    <PlayIcon size={24} />
-                                  </button>
-                                </div>
+                                {bootVideoDownloadState?.id === String(video.id) ? (
+                                  <div className="boot-video-progress-overlay">
+                                    <div className="boot-video-progress-info">
+                                      <span className="boot-video-progress-label">{t.bootVideoDownloading}</span>
+                                      <span className="boot-video-progress-percent">{bootVideoDownloadState.percent}%</span>
+                                    </div>
+                                    <div className="boot-video-progress-bar-wrap">
+                                      <div
+                                        className="boot-video-progress-bar-fill"
+                                        style={{ width: `${Math.max(4, bootVideoDownloadState.percent)}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="boot-video-thumb-overlay">
+                                    <button
+                                      type="button"
+                                      className="boot-video-play-btn"
+                                      onClick={() => { setBootVideoPreview(video.previewVideo || video.video); setBootVideoPreviewItem(video) }}
+                                    >
+                                      <PlayIcon size={24} />
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                               <div className="boot-video-info">
                                 <h4 className="boot-video-card-title">{video.title}</h4>
@@ -6542,6 +6619,23 @@ function App(): React.JSX.Element {
               name={notif.name}
               iconUrl={notif.iconUrl}
               onDismiss={dismissDownloadNotification}
+              language={language}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Boot Video Download Notifications ── */}
+      {bootVideoNotifications.length > 0 && (
+        <div className="notification-container">
+          {bootVideoNotifications.map((notif) => (
+            <BootVideoNotification
+              key={notif.id}
+              id={notif.id}
+              title={notif.title}
+              thumbnail={notif.thumbnail}
+              target={notif.target}
+              onDismiss={(id) => setBootVideoNotifications((prev) => prev.filter((n) => n.id !== id))}
               language={language}
             />
           ))}

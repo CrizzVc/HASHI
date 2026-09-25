@@ -30,6 +30,10 @@ declare global {
       saveGames: (games: any[]) => Promise<{ success: boolean; error?: string }>
       onGameExited: (callback: (data: { gameId: string; durationMinutes: number }) => void) => () => void
       onGameSessionStart: (callback: (data: { gameId: string }) => void) => () => void
+      // Fuerza a recalcular tamaños en el renderer tras un nudge de bounds del
+      // main process (workaround del desfase de layout al entrar/salir de
+      // fullscreen en monitores 4K con escalado != 100%)
+      onForceResizeRecalc: (callback: () => void) => () => void
       // Background image APIs
       selectBackgroundImage: () => Promise<string | null>
       getBackgroundImage: () => Promise<string | null>
@@ -132,8 +136,9 @@ declare global {
       checkPortInUse: (port: number) => Promise<{ inUse: boolean }>
       // Boot video management
       getBootVideoPath: () => Promise<{ boot: string | null; suspend: string | null }>
-      downloadBootVideo: (url: string, target: string) => Promise<{ success: boolean; path?: string; error?: string }>
+      downloadBootVideo: (url: string, target: string, videoId?: string) => Promise<{ success: boolean; path?: string; error?: string }>
       deleteBootVideo: (target: string) => Promise<{ success: boolean; error?: string }>
+      onBootVideoProgress?: (callback: (data: { target: string; percent: number; receivedBytes: number; totalBytes: number; videoId?: string }) => void) => () => void
       fetchSteamDeckRepoPosts: () => Promise<{ success: boolean; posts?: any[]; error?: string }>
       // Window control
       minimizeWindow: () => Promise<void>
