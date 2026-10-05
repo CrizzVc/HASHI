@@ -15,7 +15,7 @@
     "copy:backend-dist": "node scripts/copy-backend-dist.mjs",
     "prebuild": "npm --prefix ../backend install --include=dev --no-fund --no-audit && npm run prepare:backend",
     "start": "electron-vite preview",
-    "dev": "electron-vite dev",
+    "dev": "electron-vite dev -w",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir && npm run copy:backend-dist",

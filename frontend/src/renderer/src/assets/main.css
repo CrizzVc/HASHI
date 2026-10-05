@@ -6186,6 +6186,16 @@
   font-weight: 400;
 }
 
+/* Ruta o mensaje del sistema que provocó el fallo de lanzamiento */
+.notification-detail {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Consolas', 'DejaVu Sans Mono', monospace;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .notification-card-update {
   border-left: 3px solid #f12540;
   transition: transform 0.2s ease, box-shadow 0.2s ease;

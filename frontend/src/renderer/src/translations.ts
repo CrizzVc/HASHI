@@ -151,6 +151,12 @@ export interface TranslationSchema {
   readyToPlay: string
   playingGame: string
   playingGameDesc: string
+  launchErrorTitle: string
+  launchErrWine: string
+  launchErrNotFound: string
+  launchErrNoLauncher: string
+  launchErrSpawn: string
+  launchErrGeneric: string
 
   // Steam Connection
   steamConected: string
@@ -466,6 +472,12 @@ export const translations: Record<Language, TranslationSchema> = {
     readyToPlay: 'Listo para jugar',
     playingGame: 'Está jugando a ',
     playingGameDesc: 'Presiona Tab para ampliar',
+    launchErrorTitle: 'No se pudo lanzar el juego',
+    launchErrWine: 'Este es un juego de Windows (.exe) y necesitas Wine. Instálalo con tu gestor de paquetes y vuelve a intentarlo.',
+    launchErrNotFound: 'No se encuentra el archivo. Comprueba la ruta y que el disco esté conectado.',
+    launchErrNoLauncher: 'No hay forma de lanzarlo en este sistema.',
+    launchErrSpawn: 'El sistema devolvió un error al intentarlo.',
+    launchErrGeneric: 'Comprueba la ruta del ejecutable.',
 
     steamConected: 'Te has conectado correctamente.',
     steamNotConected: 'No se pudo conectar con Steam.',
@@ -751,6 +763,12 @@ export const translations: Record<Language, TranslationSchema> = {
     readyToPlay: 'Ready to play',
     playingGame: 'is playing ',
     playingGameDesc: 'Press Tab to expand',
+    launchErrorTitle: 'Could not launch the game',
+    launchErrWine: 'This is a Windows game (.exe) and you need Wine. Install it with your package manager and try again.',
+    launchErrNotFound: 'File not found. Check the path and that the drive is connected.',
+    launchErrNoLauncher: 'There is no way to launch it on this system.',
+    launchErrSpawn: 'The system returned an error while starting it.',
+    launchErrGeneric: 'Check the executable path.',
 
     steamConected: 'Steam connected',
     steamNotConected: 'Steam not connected',

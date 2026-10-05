@@ -32,6 +32,7 @@ import DownloadCompleteNotification from './components/DownloadCompleteNotificat
 import BootVideoNotification, { BootVideoNotificationData } from './components/BootVideoNotification'
 import defaultBootHtmlUrl from './assets/boot.html?url'
 import UpdateNotification, { UpdateNotificationData } from './components/UpdateNotification'
+import LaunchErrorNotification, { LaunchErrorNotificationData } from './components/LaunchErrorNotification'
 import { DownloadsModal } from './components/DownloadsModal'
 import { ModalHelper } from './components/ModalHelper'
 
@@ -611,6 +612,8 @@ function App(): React.JSX.Element {
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
   const [updateLink, setUpdateLink] = useState<string | null>(null)
   const [updateNotification, setUpdateNotification] = useState<UpdateNotificationData | null>(null)
+  // Fallos al lanzar un juego (ejecutable inexistente, Wine ausente, etc.)
+  const [launchErrors, setLaunchErrors] = useState<LaunchErrorNotificationData[]>([])
   const [appVersion, setAppVersion] = useState<string>(DEFAULT_APP_VERSION)
   const [settingsWallpaperPage, setSettingsWallpaperPage] = useState(0)
   const [, setLogoClicks] = useState(0)
@@ -1943,6 +1946,26 @@ function App(): React.JSX.Element {
         window.api.saveGames(updated)
         return updated
       })
+    })
+    return unsubscribe
+  }, [])
+
+  // ── Listen for launch errors (ejecutable inexistente, Wine ausente…) ──
+  useEffect(() => {
+    // El preload sólo se recarga al reiniciar Electron; si el renderer se
+    // recarga antes, la API aún no existe. Nunca debe tumbar la app.
+    if (typeof window.api.onGameLaunchError !== 'function') {
+      console.warn('[App] onGameLaunchError no disponible en este preload')
+      return
+    }
+    const unsubscribe = window.api.onGameLaunchError((data) => {
+      const entry: LaunchErrorNotificationData = {
+        id: `launch-${data.code}-${Date.now()}`,
+        code: data.code as LaunchErrorNotificationData['code'],
+        detail: data.detail
+      }
+      // Como mucho 3 avisos a la vez para no tapar la interfaz
+      setLaunchErrors((prev) => [...prev, entry].slice(-3))
     })
     return unsubscribe
   }, [])
@@ -6824,6 +6847,22 @@ function App(): React.JSX.Element {
             onDismiss={() => setUpdateNotification(null)}
             language={language}
           />
+        </div>
+      )}
+
+      {/* ── Launch Error Notifications ── */}
+      {launchErrors.length > 0 && (
+        <div className="notification-container">
+          {launchErrors.map((err) => (
+            <LaunchErrorNotification
+              key={err.id}
+              id={err.id}
+              code={err.code}
+              detail={err.detail}
+              onDismiss={(id) => setLaunchErrors((prev) => prev.filter((n) => n.id !== id))}
+              language={language}
+            />
+          ))}
         </div>
       )}
 

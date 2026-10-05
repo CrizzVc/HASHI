@@ -23,6 +23,17 @@ const api = {
       ipcRenderer.removeListener('game-session-start', subscription)
     }
   },
+  // Fallo al lanzar un juego (ejecutable inexistente, Wine ausente, spawn KO)
+  onGameLaunchError: (
+    callback: (data: { gameId: string; code: string; detail: string | null }) => void
+  ) => {
+    const subscription = (_event: any, data: { gameId: string; code: string; detail: string | null }) =>
+      callback(data)
+    ipcRenderer.on('game-launch-error', subscription)
+    return () => {
+      ipcRenderer.removeListener('game-launch-error', subscription)
+    }
+  },
   // Fuerza a recalcular tamaños en el renderer tras un nudge de bounds del
   // main process (workaround del desfase de layout al entrar/salir de
   // fullscreen en monitores 4K con escalado != 100%)

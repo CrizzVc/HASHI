@@ -1452,6 +1452,26 @@ app.whenReady().then(() => {
     setTimeout(() => clearInterval(interval), 4 * 60 * 60 * 1000)
   }
 
+  /** Códigos de fallo de lanzamiento (los traduce el renderer). */
+  type LaunchErrorCode = 'wine_missing' | 'not_found' | 'no_launcher' | 'spawn_failed' | 'unknown'
+
+  /**
+   * Avisa al renderer de un fallo de lanzamiento para que muestre un toast.
+   * El mensaje lo traduce el renderer a partir de `code`; `detail` (ruta o
+   * error del sistema) se muestra como línea secundaria.
+   */
+  function sendLaunchError(
+    win: BrowserWindow | null,
+    gameId: string,
+    code: LaunchErrorCode,
+    detail?: string | null
+  ): void {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('game-launch-error', { gameId, code, detail: detail ?? null })
+    }
+    console.warn(`[Launch] Fallo al lanzar (${code})${detail ? `: ${detail}` : ''}`)
+  }
+
   /**
    * Lanza el ejecutable de un juego local de forma desprendida (detached) para
    * que el juego sobreviva si el launcher se cierra.
@@ -1524,8 +1544,9 @@ app.whenReady().then(() => {
         // Linux: un .exe necesita Wine. Se comprueba ANTES de ocultar el
         // launcher para no dejar la sesión de juego colgada.
         if (IS_POSIX && ext === '.exe' && !findWine()) {
+          sendLaunchError(win, gameId, 'wine_missing', exePath)
           if (win && !win.isDestroyed()) {
-            win.webContents.send('game-exited', { gameId, durationMinutes: 1 })
+            win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
           }
           return { success: false, error: 'wine_missing', tracked: true, startTime }
         }
@@ -1540,14 +1561,19 @@ app.whenReady().then(() => {
           win.webContents.send('game-session-start', { gameId })
         }
 
-        const endSession = (): void => {
+        // `failed` → el lanzamiento no llegó a producir sesión real, así que
+        // no se contabiliza tiempo de juego.
+        const endSession = (failed = false): void => {
           if (!isGameRunning) return
           isGameRunning = false
           resumeActivities()
           if (win && !win.isDestroyed()) {
             showAfterGame(win)
             const durationMinutes = Math.round((Date.now() - startTime) / 60000)
-            win.webContents.send('game-exited', { gameId, durationMinutes: Math.max(1, durationMinutes) })
+            win.webContents.send('game-exited', {
+              gameId,
+              durationMinutes: failed ? 0 : Math.max(1, durationMinutes)
+            })
           }
         }
 
@@ -1560,15 +1586,17 @@ app.whenReady().then(() => {
 
         if (!child) {
           // No hay forma de lanzarlo (p.ej. .exe sin Wine): restaurar launcher
-          endSession()
-          return { success: false, error: 'no_launcher_available', tracked: true, startTime }
+          sendLaunchError(win, gameId, 'no_launcher', exePath)
+          endSession(true)
+          return { success: false, error: 'no_launcher', tracked: true, startTime }
         }
 
-        child.on('exit', endSession)
+        child.on('exit', () => endSession())
         // En POSIX un spawn fallido llega por 'error' (EACCES, ENOENT, ENOEXEC)
         child.on('error', (err) => {
           console.error('[Launch] spawn error:', err.message)
-          endSession()
+          sendLaunchError(win, gameId, 'spawn_failed', err.message)
+          endSession(true)
         })
 
         return { success: true, tracked: true, startTime }
@@ -1606,24 +1634,32 @@ app.whenReady().then(() => {
         return { success: true, tracked: false, startTime, steamProtocol: true }
       }
 
+      // Ruta vacía o inexistente (disco externo desmontado, borrada, mal
+      // escrita…): avisar y deshacer el estado de "jugando" en vez de
+      // minimizar y simular una sesión de juego falsa.
+      if (!hasExecutable || !fileExists) {
+        sendLaunchError(win, gameId, 'not_found', exePath || null)
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
+        }
+        return { success: false, error: 'not_found', tracked: false, startTime }
+      }
+
       if (win) {
         win.minimize()
       }
 
-      if (!hasExecutable || !fileExists) {
-        setTimeout(() => {
+      if (isShortcut) {
+        const errMsg = await shell.openPath(exePath)
+        if (errMsg) {
+          sendLaunchError(win, gameId, 'spawn_failed', errMsg)
           if (win && !win.isDestroyed()) {
             win.restore()
             win.focus()
-            const simulatedMinutes = Math.floor(Math.random() * 4) + 2
-            win.webContents.send('game-exited', { gameId, durationMinutes: simulatedMinutes })
+            win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
           }
-        }, 4000)
-        return { success: true, tracked: false, startTime, simulated: true }
-      }
-
-      if (isShortcut) {
-        await shell.openPath(exePath)
+          return { success: false, error: 'spawn_failed', tracked: false, startTime }
+        }
         setTimeout(() => {
           if (win && !win.isDestroyed()) {
             win.restore()
@@ -1638,9 +1674,11 @@ app.whenReady().then(() => {
       return { success: true, tracked: false, startTime }
     } catch (error: any) {
       console.error('Error launching game:', error)
+      sendLaunchError(win, gameId, 'unknown', error?.message)
       if (win && !win.isDestroyed() && !isGameRunning) {
         win.restore()
         win.focus()
+        win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
       }
       return { success: false, error: error.message }
     }
