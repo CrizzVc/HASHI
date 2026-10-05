@@ -20,6 +20,18 @@ app.use('/api/steam', steamRoutes);
 app.use('/api/tmdb', tmdbRoutes);
 app.use('/api/fanart', fanartRoutes);
 
-app.listen(PORT, () => {
+// Health check: permite al launcher comprobar que en este puerto corre
+// realmente un backend HASHI antes de "reutilizar" el proceso.
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, name: 'GBL-backend', port: PORT, pid: process.pid, uptime: process.uptime() });
+});
+
+const server = app.listen(PORT, () => {
   console.log(`[GBL Backend] API running on http://localhost:${PORT}`);
+});
+
+// Un EADDRINUSE u otro error de listen no deben morir en silencio.
+server.on('error', (err) => {
+  console.error(`[GBL Backend] Error escuchando en el puerto ${PORT}: ${err.message}`);
+  process.exit(1);
 });

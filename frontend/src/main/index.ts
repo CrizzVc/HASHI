@@ -153,6 +153,8 @@ let tray: Tray | null = null
 // ── Backend Express server (proceso hijo) ──
 let backendProcess: ChildProcess | null = null
 let currentBackendPort = 3000
+/** Se resuelve con el puerto definitivo cuando termina la selección al arrancar. */
+let backendPortReady: Promise<number> | null = null
 
 function getBackendPortConfigPath(): string {
   return join(app.getPath('userData'), 'backend-port.json')
@@ -502,10 +504,54 @@ function resolveBackendScript(): string | null {
   return join(process.resourcesPath, 'backend', 'src', 'app.js')
 }
 
-function startBackend(port?: number): void {
-  const resolvedPort = port || readBackendPort()
-  currentBackendPort = resolvedPort
+function getBackendLogPath(): string {
+  return join(app.getPath('userData'), 'backend.log')
+}
 
+/**
+ * ¿Ese puerto responde como backend HASHI? Evita "reutilizar" un proceso
+ * ajeno o huérfano que esté ocupando el puerto (luego no arrancaba nada y
+ * la app se quedaba sin backend).
+ */
+async function isHashiBackend(port: number): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 1500)
+    const res = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: controller.signal })
+    clearTimeout(timer)
+    if (!res.ok) return false
+    const data: any = await res.json()
+    return data?.ok === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * stdout/stderr del backend → consola de este proceso (terminal de `npm run
+ * dev`) con el prefijo `[Backend]`, y además al fichero `backend.log`.
+ */
+function pipeBackendOutput(stream: NodeJS.ReadableStream | null, isError: boolean): void {
+  if (!stream) return
+  stream.setEncoding('utf8')
+  let buffer = ''
+  stream.on('data', (chunk: string) => {
+    buffer += chunk
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const tagged = `[Backend] ${line}`
+      if (isError) console.error(tagged)
+      else console.log(tagged)
+      try {
+        fs.appendFileSync(getBackendLogPath(), `${line}\n`)
+      } catch { /* no debe tumbar el launcher por un log */ }
+    }
+  })
+}
+
+function startBackend(port?: number): void {
   if (backendProcess && !backendProcess.killed) return // ya está corriendo
 
   const scriptPath = resolveBackendScript()
@@ -518,38 +564,76 @@ function startBackend(port?: number): void {
     return
   }
 
-  // En dev puede haber un backend levantado a mano: no duplicar el proceso.
-  void checkPortInUse(resolvedPort).then((inUse) => {
-    if (inUse) {
-      console.log(`[Backend] Puerto ${resolvedPort} ya en uso; se reutiliza ese proceso.`)
-      return
+  // En dev puede haber un backend levantado a mano: se reutiliza, pero sólo
+  // si de verdad responde como backend HASHI.
+  backendPortReady = (async (): Promise<number> => {
+    const saved = port || readBackendPort()
+
+    if (await isHashiBackend(saved)) {
+      currentBackendPort = saved
+      console.log(`[Backend] Puerto ${saved}: ya hay un backend HASHI corriendo; se reutiliza ese proceso.`)
+      return saved
     }
 
-    const backendDir = join(scriptPath, '..', '..')
+    // El puerto está ocupado por OTRA cosa → buscar el siguiente libre,
+    // porque "reutilizar" un proceso ajeno dejaba la app sin backend.
+    let target = saved
+    if (await checkPortInUse(target)) {
+      let free: number | null = null
+      for (let p = 3000; p <= 3020 && free === null; p++) {
+        if (p === target) continue
+        if (!(await checkPortInUse(p))) free = p
+      }
+      if (free === null) {
+        console.error('[Backend] No hay ningún puerto libre entre 3000 y 3020.')
+        return target
+      }
+      console.warn(`[Backend] Puerto ${target} ocupado por otro proceso → usando el ${free}.`)
+      target = free
+      saveBackendPort(target)
+    }
+    currentBackendPort = target
 
     try {
-      backendProcess = fork(scriptPath, {
+      fs.writeFileSync(
+        getBackendLogPath(),
+        `--- Backend ${new Date().toISOString()} · puerto ${target} ---\n`,
+        'utf8'
+      )
+    } catch { /* ignore */ }
+
+    try {
+      const backendDir = join(scriptPath, '..', '..')
+
+      // silent: true → redirigimos la salida nosotros con el prefijo [Backend]
+      const child = fork(scriptPath, {
         cwd: backendDir,
         env: {
           ...process.env,
-          PORT: String(resolvedPort)
-        }
+          PORT: String(target)
+        },
+        silent: true
       })
+      backendProcess = child
+      pipeBackendOutput(child.stdout, false)
+      pipeBackendOutput(child.stderr, true)
 
-      backendProcess.on('error', (err) => {
+      child.on('error', (err) => {
         console.error('[Backend] Error starting:', err.message)
       })
 
-      backendProcess.on('exit', (code) => {
+      child.on('exit', (code) => {
         console.log(`[Backend] Process exited with code ${code}`)
-        backendProcess = null
+        if (backendProcess === child) backendProcess = null
       })
 
-      console.log(`[Backend] Started on port ${resolvedPort}`)
+      console.log(`[Backend] Started on port ${target}`)
     } catch (err: any) {
       console.error('[Backend] Failed to start:', err.message)
     }
-  })
+
+    return target
+  })()
 }
 
 function stopBackend(): void {
@@ -2826,8 +2910,11 @@ app.whenReady().then(() => {
   })
 
   // ── Backend port management ──
-  ipcMain.handle('get-backend-port', () => {
-    return { port: currentBackendPort }
+  ipcMain.handle('get-backend-port', async () => {
+    // Espera a que termine la selección de puerto al arrancar: si hay que
+    // cambiar de puerto, el renderer debe ver el definitivo, no el guardado.
+    const port = backendPortReady ? await backendPortReady : currentBackendPort
+    return { port }
   })
 
   ipcMain.handle('set-backend-port', async (_event, port: number) => {
@@ -2835,8 +2922,10 @@ app.whenReady().then(() => {
       return { success: false, error: 'Invalid port number' }
     }
 
+    // Si en ese puerto ya corre un backend HASHI, es nuestro (o uno levantado
+    // a mano): se puede reutilizar sin problema.
     const inUse = await checkPortInUse(port)
-    if (inUse) {
+    if (inUse && !(await isHashiBackend(port))) {
       return { success: false, error: 'port_in_use' }
     }
 
