@@ -8162,7 +8162,8 @@
 .launcher.boot-active .hero-section,
 .launcher.boot-active .games-row-container,
 .launcher.boot-active .bottom-row,
-.launcher.boot-active .sidebar {
+.launcher.boot-active .sidebar,
+.launcher.boot-active .music-player-wrapper {
   opacity: 0 !important;
   animation: none !important;
   transition: none !important;
