@@ -654,6 +654,12 @@ function App(): React.JSX.Element {
   const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
   const bootVideoLastTimeRef = useRef<number>(0)
   const [replayHomeEntrance, setReplayHomeEntrance] = useState(false)
+  const [bootSkipVisible, setBootSkipVisible] = useState(false)
+  const [bootSkipProgress, setBootSkipProgress] = useState(0)
+  const bootSkipHoldingRef = useRef(false)
+  const bootSkipRafRef = useRef(0)
+  const bootSkipStartRef = useRef(0)
+  const bootSkipVisibleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const dismissBootPlayer = useCallback(() => {
     // If already fading out, do nothing (avoid double-trigger)
@@ -702,6 +708,92 @@ function App(): React.JSX.Element {
     let rafRef2 = { current: 0 }
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(rafRef2.current) }
   }, [replayHomeEntrance])
+
+  // ── Boot skip: hold any key/button to fill progress bar and skip ──
+  const BOOT_SKIP_HOLD_MS = 1500 // hold duration to skip
+
+  const startBootSkipHold = useCallback(() => {
+    if (bootSkipHoldingRef.current || bootFadingOut) return
+    bootSkipHoldingRef.current = true
+    setBootSkipVisible(true)
+    // Clear any pending hide timer
+    if (bootSkipVisibleTimerRef.current) {
+      clearTimeout(bootSkipVisibleTimerRef.current)
+      bootSkipVisibleTimerRef.current = null
+    }
+    bootSkipStartRef.current = performance.now()
+
+    const tick = (): void => {
+      if (!bootSkipHoldingRef.current) return
+      const elapsed = performance.now() - bootSkipStartRef.current
+      const pct = Math.min(elapsed / BOOT_SKIP_HOLD_MS, 1)
+      setBootSkipProgress(pct)
+      if (pct >= 1) {
+        bootSkipHoldingRef.current = false
+        dismissBootPlayer()
+      } else {
+        bootSkipRafRef.current = requestAnimationFrame(tick)
+      }
+    }
+    bootSkipRafRef.current = requestAnimationFrame(tick)
+  }, [bootFadingOut, dismissBootPlayer])
+
+  const stopBootSkipHold = useCallback(() => {
+    bootSkipHoldingRef.current = false
+    cancelAnimationFrame(bootSkipRafRef.current)
+    setBootSkipProgress(0)
+    // Hide the button after a short delay if not held again
+    bootSkipVisibleTimerRef.current = setTimeout(() => {
+      setBootSkipVisible(false)
+    }, 2000)
+  }, [])
+
+  // Keyboard listeners for boot skip
+  useEffect(() => {
+    if (!showBootPlayer || bootFadingOut) return
+
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.repeat) return
+      startBootSkipHold()
+    }
+    const onKeyUp = (): void => {
+      stopBootSkipHold()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      cancelAnimationFrame(bootSkipRafRef.current)
+      if (bootSkipVisibleTimerRef.current) clearTimeout(bootSkipVisibleTimerRef.current)
+    }
+  }, [showBootPlayer, bootFadingOut, startBootSkipHold, stopBootSkipHold])
+
+  // Gamepad listeners for boot skip (poll while boot is showing)
+  useEffect(() => {
+    if (!showBootPlayer || bootFadingOut) return
+    let gpRaf = 0
+    let wasPressed = false
+
+    const pollGamepad = (): void => {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : []
+      let anyPressed = false
+      for (const pad of pads) {
+        if (!pad) continue
+        if (pad.buttons.some((b) => b.pressed)) { anyPressed = true; break }
+      }
+      if (anyPressed && !wasPressed) {
+        startBootSkipHold()
+      } else if (!anyPressed && wasPressed) {
+        stopBootSkipHold()
+      }
+      wasPressed = anyPressed
+      gpRaf = requestAnimationFrame(pollGamepad)
+    }
+    gpRaf = requestAnimationFrame(pollGamepad)
+    return () => cancelAnimationFrame(gpRaf)
+  }, [showBootPlayer, bootFadingOut, startBootSkipHold, stopBootSkipHold])
 
   // Load boot video paths on mount — fall back to built-in boot.html when no
   // custom boot video has been downloaded from the API.
@@ -6352,7 +6444,6 @@ function App(): React.JSX.Element {
       {showBootPlayer && (bootPlayerVideoPath || useDefaultBootHtml) && !bootVideoFailed && (
         <div
           className={`boot-player-overlay${bootFadingOut ? ' boot-player-fading-out' : ''}`}
-          onClick={dismissBootPlayer}
         >
           {useDefaultBootHtml ? (
             /* Default boot.html animation (shown when no custom video is set) */
@@ -6411,13 +6502,16 @@ function App(): React.JSX.Element {
               onEnded={dismissBootPlayer}
             />
           )}
-          <button
-            type="button"
-            className="boot-player-skip"
-            onClick={(e) => { e.stopPropagation(); dismissBootPlayer() }}
-          >
-            {t.close || 'Skip'} ✕
-          </button>
+          {/* Hold-to-skip button */}
+          <div className={`boot-skip-container ${bootSkipVisible && !bootFadingOut ? 'visible' : ''}`}>
+            <div className="boot-skip-btn">
+              <div
+                className="boot-skip-fill"
+                style={{ width: `${bootSkipProgress * 100}%` }}
+              />
+              <span className="boot-skip-label">Skip</span>
+            </div>
+          </div>
         </div>
       )}
 
