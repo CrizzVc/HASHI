@@ -30,6 +30,7 @@ import MusicPlayer from './components/MusicPlayer'
 import NotificationContainer from './components/NotificationContainer'
 import DownloadCompleteNotification from './components/DownloadCompleteNotification'
 import BootVideoNotification, { BootVideoNotificationData } from './components/BootVideoNotification'
+import defaultBootHtmlUrl from './assets/boot.html?url'
 import UpdateNotification, { UpdateNotificationData } from './components/UpdateNotification'
 import { DownloadsModal } from './components/DownloadsModal'
 import { ModalHelper } from './components/ModalHelper'
@@ -648,6 +649,7 @@ function App(): React.JSX.Element {
   const [bootPlayerVideoPath, setBootPlayerVideoPath] = useState<string | null>(null)
   const [bootVideoReloadKey, setBootVideoReloadKey] = useState(0)
   const [bootVideoFailed, setBootVideoFailed] = useState(false)
+  const [useDefaultBootHtml, setUseDefaultBootHtml] = useState(false)
   const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
   const bootVideoLastTimeRef = useRef<number>(0)
   const [replayHomeEntrance, setReplayHomeEntrance] = useState(false)
@@ -661,6 +663,7 @@ function App(): React.JSX.Element {
     }
     setShowBootPlayer(false)
     setBootPlayerVideoPath(null)
+    setUseDefaultBootHtml(false)
     setReplayHomeEntrance(true)
   }, [])
 
@@ -690,18 +693,33 @@ function App(): React.JSX.Element {
     return () => { cancelAnimationFrame(raf1); cancelAnimationFrame(rafRef2.current) }
   }, [replayHomeEntrance])
 
-  // Load boot video paths on mount
+  // Load boot video paths on mount — fall back to built-in boot.html when no
+  // custom boot video has been downloaded from the API.
   useEffect(() => {
     window.api?.getBootVideoPath?.().then((paths) => {
       if (paths) {
         setBootVideoPaths(paths)
         if (paths.boot) {
+          // User has a custom boot video downloaded
           setBootPlayerVideoPath(paths.boot)
           setBootVideoFailed(false)
+          setUseDefaultBootHtml(false)
+          setShowBootPlayer(true)
+        } else {
+          // No custom video: show the default boot.html animation
+          setUseDefaultBootHtml(true)
           setShowBootPlayer(true)
         }
+      } else {
+        // API not available or returned null: show default boot.html
+        setUseDefaultBootHtml(true)
+        setShowBootPlayer(true)
       }
-    }).catch(() => { })
+    }).catch(() => {
+      // On error, still show the default boot.html
+      setUseDefaultBootHtml(true)
+      setShowBootPlayer(true)
+    })
   }, [])
 
   // ── Reproducción del video de arranque a pantalla completa ──
@@ -6322,50 +6340,69 @@ function App(): React.JSX.Element {
         </div>
       )}
 
-      {/* ── Boot Video Fullscreen Player ── */}
-      {showBootPlayer && bootPlayerVideoPath && !bootVideoFailed && (
+      {/* ── Boot Video Fullscreen Player (video or default HTML) ── */}
+      {showBootPlayer && (bootPlayerVideoPath || useDefaultBootHtml) && !bootVideoFailed && (
         <div
           className="boot-player-overlay"
           onClick={dismissBootPlayer}
         >
-          <video
-            ref={bootPlayerVideoRef}
-            key={`${bootVideoReloadKey}-${bootPlayerVideoPath}`}
-            src={bootPlayerVideoPath || undefined}
-            className="boot-player-video"
-            playsInline
-            preload="auto"
-            loop={false}
-            onTimeUpdate={(e) => {
-              const vid = e.currentTarget
-              const current = vid.currentTime
-              const duration = vid.duration
+          {useDefaultBootHtml ? (
+            /* Default boot.html animation (shown when no custom video is set) */
+            <iframe
+              src={defaultBootHtmlUrl}
+              className="boot-player-iframe"
+              title="Boot Animation"
+              frameBorder="0"
+              allowFullScreen
+              sandbox="allow-scripts allow-same-origin"
+              onLoad={() => {
+                // Auto-dismiss the default boot animation after 8 seconds
+                setTimeout(() => {
+                  dismissBootPlayer()
+                }, 8000)
+              }}
+            />
+          ) : (
+            /* Custom boot video from the API */
+            <video
+              ref={bootPlayerVideoRef}
+              key={`${bootVideoReloadKey}-${bootPlayerVideoPath}`}
+              src={bootPlayerVideoPath || undefined}
+              className="boot-player-video"
+              playsInline
+              preload="auto"
+              loop={false}
+              onTimeUpdate={(e) => {
+                const vid = e.currentTarget
+                const current = vid.currentTime
+                const duration = vid.duration
 
-              // Dismiss immediately if at or near the end of video duration
-              if (duration && isFinite(duration) && duration > 0 && current >= duration - 0.15) {
-                dismissBootPlayer()
-                return
-              }
+                // Dismiss immediately if at or near the end of video duration
+                if (duration && isFinite(duration) && duration > 0 && current >= duration - 0.15) {
+                  dismissBootPlayer()
+                  return
+                }
 
-              // Dismiss if browser restarted/looped the video
-              if (bootVideoLastTimeRef.current > 0.8 && current < 0.3) {
-                dismissBootPlayer()
-                return
-              }
+                // Dismiss if browser restarted/looped the video
+                if (bootVideoLastTimeRef.current > 0.8 && current < 0.3) {
+                  dismissBootPlayer()
+                  return
+                }
 
-              bootVideoLastTimeRef.current = current
-            }}
-            onError={() => {
-              console.warn('Boot video failed to load/play, retrying or skipping.');
-              if (bootVideoReloadKey < 2) {
-                setBootVideoReloadKey((current) => current + 1)
-              } else {
-                setBootVideoFailed(true)
-                dismissBootPlayer()
-              }
-            }}
-            onEnded={dismissBootPlayer}
-          />
+                bootVideoLastTimeRef.current = current
+              }}
+              onError={() => {
+                console.warn('Boot video failed to load/play, retrying or skipping.');
+                if (bootVideoReloadKey < 2) {
+                  setBootVideoReloadKey((current) => current + 1)
+                } else {
+                  setBootVideoFailed(true)
+                  dismissBootPlayer()
+                }
+              }}
+              onEnded={dismissBootPlayer}
+            />
+          )}
           <button
             type="button"
             className="boot-player-skip"

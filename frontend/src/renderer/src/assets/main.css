@@ -8122,6 +8122,13 @@
   object-fit: cover;
 }
 
+.boot-player-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  pointer-events: none;
+}
+
 .boot-player-skip {
   position: fixed;
   bottom: 24px;

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Degradado Animado Premium</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1d1c1b;
+        }
+
+        .gradient-canvas {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #1d1c1b;
+        }
+
+        .lights-group {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            animation: fadeInLights 5s ease-out 1s forwards;
+        }
+
+        .blob {
+            position: absolute;
+            background-repeat: no-repeat;
+            mix-blend-mode: screen;
+            will-change: transform;
+            filter: blur(50px); /* suaviza los bordes como en la referencia */
+        }
+
+        /* 1. Mancha grande izquierda: rojo #f22a41 apagado */
+        .blob-left {
+            top: 12%;
+            left: 5%;
+            width: 55vw;
+            height: 55vw;
+            background: radial-gradient(circle,
+                rgba(242, 42, 65, 0.55) 0%,
+                rgba(242, 42, 65, 0.22) 40%,
+                rgba(242, 42, 65, 0) 70%);
+            animation: floatLeft 12s ease-in-out infinite alternate;
+        }
+
+        /* 2. Resplandor inferior: versión clara del rojo (tono "crema" de la referencia) */
+        .blob-bottom {
+            bottom: -28%;
+            left: 20%;
+            width: 65vw;
+            height: 34vw;
+            background: radial-gradient(ellipse,
+                rgba(255, 150, 140, 0.85) 0%,
+                rgba(242, 42, 65, 0.35) 40%,
+                rgba(242, 42, 65, 0) 70%);
+            animation: floatBottom 10s ease-in-out infinite alternate;
+        }
+
+        /* 3. Destello tenue arriba, centrado (la esquina derecha queda oscura) */
+        .blob-top-right {
+            top: -15%;
+            right: 35%;
+            width: 40vw;
+            height: 35vw;
+            background: radial-gradient(circle,
+                rgba(242, 42, 65, 0.28) 0%,
+                rgba(242, 42, 65, 0) 65%);
+            animation: floatRight 15s ease-in-out infinite alternate;
+        }
+
+        /* Logo centrado */
+        .logo-wrap {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            display: grid;
+            place-items: center;
+            pointer-events: none;
+            opacity: 0;
+            animation: fadeInLights 4s ease-out 2s forwards;
+        }
+
+        .logo {
+            width: clamp(140px, 18vw, 340px);
+            height: auto;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        /* Viñeta: oscurece los bordes */
+        .gradient-canvas::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+            background: radial-gradient(ellipse at 40% 55%,
+                rgba(0, 0, 0, 0) 35%,
+                rgba(0, 0, 0, 0.7) 100%);
+        }
+
+        /* Grano anti-banding (corregido: el SVG original estaba roto) */
+        .gradient-canvas::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 3;
+            opacity: 0.07;
+            pointer-events: none;
+            mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        @keyframes fadeInLights {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+
+        @keyframes floatLeft {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(4%, 6%) scale(1.05); }
+            100% { transform: translate(-3%, -4%) scale(0.95); }
+        }
+
+        @keyframes floatBottom {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(-5%, -3%) rotate(3deg); }
+            100% { transform: translate(5%, -1%) rotate(-2deg); }
+        }
+
+        @keyframes floatRight {
+            0% { transform: translate(0, 0) scale(0.9); }
+            50% { transform: translate(-6%, 5%) scale(1.1); }
+            100% { transform: translate(2%, -3%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="gradient-canvas">
+        <div class="lights-group">
+            <div class="blob blob-left"></div>
+            <div class="blob blob-bottom"></div>
+            <div class="blob blob-top-right"></div>
+        </div>
+
+        <!-- Logo en el centro -->
+        <div class="logo-wrap">
+            <img class="logo" alt="HASHI"
+                 src="https://raw.githubusercontent.com/CrizzVc/HASHI/81bb9dde27a8ed9341cc5153090c022a81e310b5/frontend/src/renderer/src/assets/images/HASHI_LOGO_BLANCO.svg">
+        </div>
+    </div>
+
+
+  </body>
+</html>
