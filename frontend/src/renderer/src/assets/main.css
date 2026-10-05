@@ -8157,6 +8157,17 @@
   color: #fff;
 }
 
+/* ── Hide home elements while boot overlay is visible (including fade-out) ── */
+.launcher.boot-active .header-bar,
+.launcher.boot-active .hero-section,
+.launcher.boot-active .games-row-container,
+.launcher.boot-active .bottom-row,
+.launcher.boot-active .sidebar {
+  opacity: 0 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
 /* ── Replay home entrance animation after boot video ends ── */
 .launcher.replay-entrance .header-bar,
 .launcher.replay-entrance .hero-section,

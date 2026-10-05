@@ -3831,7 +3831,7 @@ function App(): React.JSX.Element {
   )
 
   return (
-    <div className={`launcher ${showIdleMode ? 'idle' : ''} ${isWallpaperMode ? 'wallpaper-mode' : ''} ${replayHomeEntrance ? 'replay-entrance' : ''}`}>
+    <div className={`launcher ${showIdleMode ? 'idle' : ''} ${isWallpaperMode ? 'wallpaper-mode' : ''} ${showBootPlayer ? 'boot-active' : ''} ${replayHomeEntrance ? 'replay-entrance' : ''}`}>
       {/* ── Sidebar ── */}
       <div
         className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
