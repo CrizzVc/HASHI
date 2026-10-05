@@ -80,6 +80,45 @@ function findWine(): string | null {
   return winePathCache
 }
 
+/** Ruta del ejecutable `proton` de Steam si está instalado (cacheada). Nulo en Windows. */
+let protonPathCache: string | null | undefined
+function findProton(): string | null {
+  if (IS_WIN) return null
+  if (protonPathCache !== undefined) return protonPathCache
+
+  const searchDirs = [
+    join(USER_HOME, '.local/share/Steam/steamapps/common'),
+    join(USER_HOME, '.local/share/Steam/compatibilitytools.d'),
+    join(USER_HOME, '.steam/root/compatibilitytools.d'),
+    join(USER_HOME, '.steam/steam/steamapps/common'),
+    join(USER_HOME, '.var/app/com.valvesoftware.Steam/data/Steam/steamapps/common'),
+    join(USER_HOME, '.var/app/com.valvesoftware.Steam/data/Steam/compatibilitytools.d'),
+    '/usr/share/steam/compatibilitytools.d'
+  ]
+
+  for (const dir of searchDirs) {
+    if (!fs.existsSync(dir)) continue
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      entries.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }))
+      for (const entry of entries) {
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+        if (!entry.name.toLowerCase().includes('proton')) continue
+        const protonExec = join(dir, entry.name, 'proton')
+        if (fs.existsSync(protonExec)) {
+          protonPathCache = protonExec
+          return protonPathCache
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  protonPathCache = null
+  return null
+}
+
 
 // Permitir autoplay de video con sonido sin interacción del usuario (boot video)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -1868,24 +1907,66 @@ app.whenReady().then(() => {
 
     const ext = extname(exePath).toLowerCase()
 
-    // Juego de Windows: requiere Wine (Proton solo aplica a juegos de Steam)
+    // Juego de Windows: prioriza Proton si está instalado en Steam, o Wine en su defecto
     if (ext === '.exe') {
+      const proton = findProton()
       const wine = findWine()
-      if (!wine) return null
-      // Eleva ulimit -n a 524288 para evitar crash por desbordamiento de descriptores en juegos pesados (Unity/Unreal/Esync/Fsync)
-      const gameEnv = {
-        ...process.env,
-        WINEESYNC: process.env.WINEESYNC ?? '1',
-        WINEFSYNC: process.env.WINEFSYNC ?? '1'
+
+      if (proton) {
+        const steamInstallPath =
+          firstExisting([
+            join(USER_HOME, '.local/share/Steam'),
+            join(USER_HOME, '.steam/steam'),
+            join(USER_HOME, '.var/app/com.valvesoftware.Steam/data/Steam')
+          ]) || join(USER_HOME, '.local/share/Steam')
+
+        const compatDataPath = join(USER_HOME, '.local/share/hashi/proton_prefix')
+        try {
+          fs.mkdirSync(compatDataPath, { recursive: true })
+        } catch {
+          // ignore
+        }
+
+        const gameEnv = {
+          ...process.env,
+          STEAM_COMPAT_CLIENT_INSTALL_PATH: steamInstallPath,
+          STEAM_COMPAT_DATA_PATH: compatDataPath,
+          WINEESYNC: process.env.WINEESYNC ?? '1',
+          WINEFSYNC: process.env.WINEFSYNC ?? '1'
+        }
+
+        const child = spawn(
+          'sh',
+          ['-c', 'ulimit -n 524288 2>/dev/null || true; exec "$0" "run" "$@"', proton, exePath],
+          {
+            detached: true,
+            cwd,
+            stdio: 'ignore',
+            env: gameEnv
+          }
+        )
+        child.unref()
+        return child
       }
-      const child = spawn('sh', ['-c', 'ulimit -n 524288 2>/dev/null || true; exec "$0" "$@"', wine, exePath], {
-        detached: true,
-        cwd,
-        stdio: 'ignore',
-        env: gameEnv
-      })
-      child.unref()
-      return child
+
+      if (wine) {
+        // Eleva ulimit -n a 524288 para evitar crash por desbordamiento de descriptores en juegos pesados (Unity/Unreal/Esync/Fsync)
+        const gameEnv = {
+          ...process.env,
+          WINEESYNC: process.env.WINEESYNC ?? '1',
+          WINEFSYNC: process.env.WINEFSYNC ?? '1'
+        }
+        const child = spawn('sh', ['-c', 'ulimit -n 524288 2>/dev/null || true; exec "$0" "$@"', wine, exePath], {
+          detached: true,
+          cwd,
+          stdio: 'ignore',
+          env: gameEnv
+        })
+        child.unref()
+        return child
+      }
+
+      return null
     }
 
     // Scripts (el .sh puede no ser ejecutable, así que lo pasamos al intérprete)
@@ -1925,9 +2006,9 @@ app.whenReady().then(() => {
       const startTime = Date.now()
 
       if (isTrackedExe) {
-        // Linux: un .exe necesita Wine. Se comprueba ANTES de ocultar el
+        // Linux: un .exe necesita Proton o Wine. Se comprueba ANTES de ocultar el
         // launcher para no dejar la sesión de juego colgada.
-        if (IS_POSIX && ext === '.exe' && !findWine()) {
+        if (IS_POSIX && ext === '.exe' && !findProton() && !findWine()) {
           sendLaunchError(win, gameId, 'wine_missing', exePath)
           if (win && !win.isDestroyed()) {
             win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
