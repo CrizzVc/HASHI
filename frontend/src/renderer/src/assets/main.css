@@ -8114,6 +8114,13 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.7s ease-in-out;
+}
+
+.boot-player-overlay.boot-player-fading-out {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .boot-player-video {

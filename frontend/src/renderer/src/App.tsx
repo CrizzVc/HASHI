@@ -650,21 +650,31 @@ function App(): React.JSX.Element {
   const [bootVideoReloadKey, setBootVideoReloadKey] = useState(0)
   const [bootVideoFailed, setBootVideoFailed] = useState(false)
   const [useDefaultBootHtml, setUseDefaultBootHtml] = useState(false)
+  const [bootFadingOut, setBootFadingOut] = useState(false)
   const bootPlayerVideoRef = useRef<HTMLVideoElement>(null)
   const bootVideoLastTimeRef = useRef<number>(0)
   const [replayHomeEntrance, setReplayHomeEntrance] = useState(false)
 
   const dismissBootPlayer = useCallback(() => {
-    const videoEl = bootPlayerVideoRef.current
-    if (videoEl) {
-      try {
-        videoEl.pause()
-      } catch {}
-    }
-    setShowBootPlayer(false)
-    setBootPlayerVideoPath(null)
-    setUseDefaultBootHtml(false)
-    setReplayHomeEntrance(true)
+    // If already fading out, do nothing (avoid double-trigger)
+    setBootFadingOut((prev) => {
+      if (prev) return prev
+      // Start the fade-out animation; actual cleanup happens after CSS transition ends
+      setTimeout(() => {
+        const videoEl = bootPlayerVideoRef.current
+        if (videoEl) {
+          try { videoEl.pause() } catch {}
+        }
+        setShowBootPlayer(false)
+        setBootPlayerVideoPath(null)
+        setUseDefaultBootHtml(false)
+        setBootFadingOut(false)
+        setReplayHomeEntrance(true)
+        // Play the startup sound when home is revealed
+        playHome()
+      }, 700) // matches the CSS fade-out duration
+      return true
+    })
   }, [])
 
   // Listen to boot video download progress
@@ -1402,10 +1412,8 @@ function App(): React.JSX.Element {
 
   const controllerStateRef = useRef<boolean | null>(null)
   useGamepadNavigation(isControllerConnected && !runningGameId && !isGameRunning)
-  useEffect(() => {
-    // Reproduce sonido de inicio (home.mp3) al abrir la app
-    playHome()
-  }, [])
+  // NOTE: playHome() now fires inside dismissBootPlayer() so the startup sound
+  // plays when home is revealed after the boot animation ends, not on mount.
 
   useEffect(() => {
     const syncControllerStatus = (connected: boolean): void => {
@@ -6343,7 +6351,7 @@ function App(): React.JSX.Element {
       {/* ── Boot Video Fullscreen Player (video or default HTML) ── */}
       {showBootPlayer && (bootPlayerVideoPath || useDefaultBootHtml) && !bootVideoFailed && (
         <div
-          className="boot-player-overlay"
+          className={`boot-player-overlay${bootFadingOut ? ' boot-player-fading-out' : ''}`}
           onClick={dismissBootPlayer}
         >
           {useDefaultBootHtml ? (
