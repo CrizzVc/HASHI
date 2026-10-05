@@ -1872,7 +1872,18 @@ app.whenReady().then(() => {
     if (ext === '.exe') {
       const wine = findWine()
       if (!wine) return null
-      const child = spawn(wine, [exePath], { detached: true, cwd, stdio: 'ignore', env: process.env })
+      // Eleva ulimit -n a 524288 para evitar crash por desbordamiento de descriptores en juegos pesados (Unity/Unreal/Esync/Fsync)
+      const gameEnv = {
+        ...process.env,
+        WINEESYNC: process.env.WINEESYNC ?? '1',
+        WINEFSYNC: process.env.WINEFSYNC ?? '1'
+      }
+      const child = spawn('sh', ['-c', 'ulimit -n 524288 2>/dev/null || true; exec "$0" "$@"', wine, exePath], {
+        detached: true,
+        cwd,
+        stdio: 'ignore',
+        env: gameEnv
+      })
       child.unref()
       return child
     }
