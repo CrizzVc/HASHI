@@ -6,7 +6,8 @@ import hashiLogoAsset from '../renderer/src/assets/images/HASHI_LOGO_BLANCO.svg?
 import appIconAsset from '../renderer/src/assets/images/ICONO.png?asset'
 import * as fs from 'fs'
 import * as crypto from 'crypto'
-import { spawn, fork, execSync, type ChildProcess } from 'child_process'
+import { spawn, fork, execSync, execFile, type ChildProcess } from 'child_process'
+import { promisify } from 'util'
 import * as http from 'http'
 import * as nodeNet from 'net'
 import * as os from 'os'
@@ -776,45 +777,325 @@ function resolveMediaControlApp(target: any): string | undefined {
   return aumid || undefined
 }
 
-async function sendMediaControlAction(action: string, target: any): Promise<any> {
-  if (!IS_WIN) return { success: false }
-  const media = await getWinMediaControlModule()
-  if (!media) return { success: false, error: 'win-media-control unavailable' }
-  const fnByAction: Record<string, any> = {
-    play_pause: media.togglePlayPause,
-    play: media.togglePlayPause,
-    pause: media.togglePlayPause,
-    toggle: media.togglePlayPause,
-    next: media.next,
-    prev: media.previous,
-    previous: media.previous
-  }
-  const fn = fnByAction[action]
-  if (!fn) return { success: false, error: 'unknown action' }
-  const app = resolveMediaControlApp(target)
+const execFileAsync = promisify(execFile)
+let hasCheckedLinuxMediaTools = false
+let hasPlayerctl = false
+let hasBusctl = false
+
+async function checkLinuxMediaTools(): Promise<void> {
+  if (hasCheckedLinuxMediaTools) return
+  hasCheckedLinuxMediaTools = true
   try {
-    let result = app !== undefined ? await fn(app) : await fn()
-    let ok = Array.isArray(result?.success) && result.success.length > 0
-    if (!ok && app !== undefined) {
-      result = await fn()
-      ok = Array.isArray(result?.success) && result.success.length > 0
-    }
-    setTimeout(broadcastMediaSessions, 350)
-    return { success: ok, ...result }
-  } catch (err: any) {
-    console.warn('[MediaControl]', action, err.message)
-    return { success: false, error: err.message }
+    const { stdout } = await execFileAsync('which', ['playerctl'], { timeout: 500 })
+    hasPlayerctl = Boolean(stdout.trim())
+  } catch {
+    hasPlayerctl = false
   }
+  try {
+    const { stdout } = await execFileAsync('which', ['busctl'], { timeout: 500 })
+    hasBusctl = Boolean(stdout.trim())
+  } catch {
+    hasBusctl = false
+  }
+}
+
+async function getLinuxMediaSessions(): Promise<any[]> {
+  if (process.platform !== 'linux') return []
+  await checkLinuxMediaTools()
+
+  if (hasPlayerctl) {
+    try {
+      const { stdout } = await execFileAsync(
+        'playerctl',
+        ['metadata', '-a', '--format', '{{playerName}}|||{{status}}|||{{title}}|||{{artist}}|||{{album}}|||{{mpris:artUrl}}|||{{position}}|||{{mpris:length}}'],
+        { timeout: 1500 }
+      )
+      const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+      const sessions: any[] = []
+      for (const line of lines) {
+        const parts = line.split('|||')
+        const playerName = parts[0]
+        if (!playerName) continue
+        const status = parts[1] || ''
+        const title = parts[2] || ''
+        const artist = parts[3] || ''
+        const albumTitle = parts[4] || ''
+        const artUrl = parts[5] || ''
+        const positionUs = parts[6] || '0'
+        const durationUs = parts[7] || '0'
+
+        let playbackStatus = 'opened'
+        const stLower = status.toLowerCase()
+        if (stLower === 'playing') playbackStatus = 'playing'
+        else if (stLower === 'paused') playbackStatus = 'paused'
+        else if (stLower === 'stopped') playbackStatus = 'stopped'
+
+        let thumbnail: string | undefined
+        if (artUrl) {
+          if (artUrl.startsWith('file://')) {
+            const filePath = decodeURIComponent(artUrl.replace(/^file:\/\//, ''))
+            if (fs.existsSync(filePath)) {
+              thumbnail = toMediaUrl(filePath)
+            }
+          } else if (artUrl.startsWith('http://') || artUrl.startsWith('https://')) {
+            thumbnail = artUrl
+          }
+        }
+
+        const posMs = Math.max(0, Math.round((Number(positionUs) || 0) / 1000))
+        const durMs = Math.max(0, Math.round((Number(durationUs) || 0) / 1000))
+
+        const appDisplayName =
+          playerName.toLowerCase() === 'spotify'
+            ? 'Spotify'
+            : playerName.toLowerCase() === 'firefox'
+            ? 'Firefox'
+            : playerName.toLowerCase().includes('chrome')
+            ? 'Chrome'
+            : playerName.charAt(0).toUpperCase() + playerName.slice(1)
+
+        sessions.push({
+          id: playerName,
+          sourceAppUserModelId: playerName,
+          sourceAppDisplayName: appDisplayName,
+          title: title || undefined,
+          artist: artist || undefined,
+          albumTitle: albumTitle || undefined,
+          thumbnail,
+          playbackStatus,
+          timeline: {
+            positionMs: posMs,
+            durationMs: durMs
+          },
+          controls: {
+            canPlay: true,
+            canPause: true,
+            canSkipNext: true,
+            canSkipPrevious: true
+          }
+        })
+      }
+      return sessions
+    } catch {}
+  }
+
+  if (hasBusctl) {
+    try {
+      const { stdout: busOut } = await execFileAsync('busctl', ['--user', 'list'], { timeout: 1000 })
+      const matches = Array.from(busOut.matchAll(/(org\.mpris\.MediaPlayer2\.[\w.-]+)/g))
+      const players = Array.from(new Set(matches.map((m) => m[1]))).filter(
+        (p) => !p.endsWith('.playerctld')
+      )
+      const sessions: any[] = []
+      for (const service of players) {
+        try {
+          const playerName = service.replace('org.mpris.MediaPlayer2.', '')
+          const { stdout: stOut } = await execFileAsync(
+            'busctl',
+            ['--user', 'get-property', service, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', 'PlaybackStatus'],
+            { timeout: 500 }
+          )
+          const statusMatch = stOut.match(/s\s+"([^"]+)"/)
+          const rawStatus = statusMatch ? statusMatch[1] : 'Playing'
+          let playbackStatus = 'opened'
+          if (rawStatus.toLowerCase() === 'playing') playbackStatus = 'playing'
+          else if (rawStatus.toLowerCase() === 'paused') playbackStatus = 'paused'
+          else if (rawStatus.toLowerCase() === 'stopped') playbackStatus = 'stopped'
+
+          const { stdout: metaOut } = await execFileAsync(
+            'busctl',
+            ['--user', 'get-property', service, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', 'Metadata'],
+            { timeout: 500 }
+          )
+
+          const titleMatch = metaOut.match(/"xesam:title"\s+s\s+"([^"]+)"/)
+          const artistMatch = metaOut.match(/"xesam:artist"\s+(?:as\s+\d+\s+)?(?:\[\s*)?"([^"]+)"/)
+          const albumMatch = metaOut.match(/"xesam:album"\s+s\s+"([^"]+)"/)
+          const artMatch = metaOut.match(/"mpris:artUrl"\s+s\s+"([^"]+)"/)
+          const durMatch = metaOut.match(/"mpris:length"\s+t\s+(\d+)/)
+
+          const title = titleMatch ? titleMatch[1] : undefined
+          const artist = artistMatch ? artistMatch[1] : undefined
+          const albumTitle = albumMatch ? albumMatch[1] : undefined
+          const artUrl = artMatch ? artMatch[1] : undefined
+          const durUs = durMatch ? durMatch[1] : '0'
+
+          let thumbnail: string | undefined
+          if (artUrl) {
+            if (artUrl.startsWith('file://')) {
+              const filePath = decodeURIComponent(artUrl.replace(/^file:\/\//, ''))
+              if (fs.existsSync(filePath)) {
+                thumbnail = toMediaUrl(filePath)
+              }
+            } else if (artUrl.startsWith('http://') || artUrl.startsWith('https://')) {
+              thumbnail = artUrl
+            }
+          }
+
+          const durMs = Math.max(0, Math.round((Number(durUs) || 0) / 1000))
+          const appDisplayName =
+            playerName.toLowerCase() === 'spotify'
+              ? 'Spotify'
+              : playerName.toLowerCase() === 'firefox'
+              ? 'Firefox'
+              : playerName.toLowerCase().includes('chrome')
+              ? 'Chrome'
+              : playerName.charAt(0).toUpperCase() + playerName.slice(1)
+
+          sessions.push({
+            id: playerName,
+            sourceAppUserModelId: playerName,
+            sourceAppDisplayName: appDisplayName,
+            title,
+            artist,
+            albumTitle,
+            thumbnail,
+            playbackStatus,
+            timeline: { positionMs: 0, durationMs: durMs },
+            controls: { canPlay: true, canPause: true, canSkipNext: true, canSkipPrevious: true }
+          })
+        } catch {}
+      }
+      return sessions
+    } catch {}
+  }
+
+  return []
+}
+
+async function sendLinuxMediaControlAction(action: string, target: any): Promise<any> {
+  if (process.platform !== 'linux') return { success: false }
+  await checkLinuxMediaTools()
+
+  const normAction =
+    action === 'play'
+      ? 'play'
+      : action === 'pause'
+      ? 'pause'
+      : action === 'next'
+      ? 'next'
+      : action === 'prev' || action === 'previous'
+      ? 'previous'
+      : 'play-pause'
+
+  let targetName = ''
+  if (target) {
+    if (typeof target === 'string') {
+      targetName = target
+    } else if (typeof target === 'object') {
+      targetName = target.appName || target.sourceAppUserModelId || ''
+    }
+  }
+
+  if (hasPlayerctl) {
+    try {
+      const args = targetName ? ['-p', targetName.toLowerCase(), normAction] : [normAction]
+      await execFileAsync('playerctl', args, { timeout: 1500 })
+      return { success: true }
+    } catch {
+      if (targetName) {
+        try {
+          await execFileAsync('playerctl', [normAction], { timeout: 1500 })
+          return { success: true }
+        } catch {}
+      }
+    }
+  }
+
+  if (hasBusctl) {
+    try {
+      const busAction =
+        normAction === 'play'
+          ? 'Play'
+          : normAction === 'pause'
+          ? 'Pause'
+          : normAction === 'next'
+          ? 'Next'
+          : normAction === 'previous'
+          ? 'Previous'
+          : 'PlayPause'
+
+      let service = ''
+      if (targetName) {
+        service = `org.mpris.MediaPlayer2.${targetName.toLowerCase()}`
+      } else {
+        const { stdout: busOut } = await execFileAsync('busctl', ['--user', 'list'], { timeout: 1000 })
+        const matches = Array.from(busOut.matchAll(/(org\.mpris\.MediaPlayer2\.[\w.-]+)/g))
+        const players = Array.from(new Set(matches.map((m) => m[1]))).filter(
+          (p) => !p.endsWith('.playerctld')
+        )
+        if (players.length > 0) service = players[0]
+      }
+
+      if (service) {
+        await execFileAsync(
+          'busctl',
+          ['--user', 'call', service, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', busAction],
+          { timeout: 1500 }
+        )
+        return { success: true }
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+
+  return { success: false, error: 'No Linux media control utility available' }
+}
+
+async function sendMediaControlAction(action: string, target: any): Promise<any> {
+  if (IS_WIN) {
+    const media = await getWinMediaControlModule()
+    if (!media) return { success: false, error: 'win-media-control unavailable' }
+    const fnByAction: Record<string, any> = {
+      play_pause: media.togglePlayPause,
+      play: media.togglePlayPause,
+      pause: media.togglePlayPause,
+      toggle: media.togglePlayPause,
+      next: media.next,
+      prev: media.previous,
+      previous: media.previous
+    }
+    const fn = fnByAction[action]
+    if (!fn) return { success: false, error: 'unknown action' }
+    const app = resolveMediaControlApp(target)
+    try {
+      let result = app !== undefined ? await fn(app) : await fn()
+      let ok = Array.isArray(result?.success) && result.success.length > 0
+      if (!ok && app !== undefined) {
+        result = await fn()
+        ok = Array.isArray(result?.success) && result.success.length > 0
+      }
+      setTimeout(broadcastMediaSessions, 350)
+      return { success: ok, ...result }
+    } catch (err: any) {
+      console.warn('[MediaControl]', action, err.message)
+      return { success: false, error: err.message }
+    }
+  } else if (process.platform === 'linux') {
+    const res = await sendLinuxMediaControlAction(action, target)
+    setTimeout(broadcastMediaSessions, 350)
+    return res
+  }
+  return { success: false }
 }
 
 async function fetchMediaSessionsForRenderer(): Promise<any[]> {
   let sessions: any[] = []
-  const mediaModule = getWindowsMediaSessionsModule()
-  if (process.platform === 'win32' && mediaModule?.getAllSessions) {
+  if (process.platform === 'win32') {
+    const mediaModule = getWindowsMediaSessionsModule()
+    if (mediaModule?.getAllSessions) {
+      try {
+        sessions = await mediaModule.getAllSessions()
+      } catch (err: any) {
+        console.warn('[MediaSessions] fetch:', err.message)
+      }
+    }
+  } else if (process.platform === 'linux') {
     try {
-      sessions = await mediaModule.getAllSessions()
+      sessions = await getLinuxMediaSessions()
     } catch (err: any) {
-      console.warn('[MediaSessions] fetch:', err.message)
+      console.warn('[MediaSessions Linux] fetch:', err.message)
     }
   }
   return sessions
@@ -832,22 +1113,28 @@ function broadcastMediaSessions(): void {
 }
 
 function startMediaSessionsBridge(): void {
-  if (process.platform !== 'win32') return
-  const mediaModule = getWindowsMediaSessionsModule()
-  if (!mediaModule) {
-    console.warn('[MediaSessions] Paquete no instalado. Ejecuta: npm install windows-media-sessions')
-    mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
-    return
-  }
-  try {
-    broadcastMediaSessions()
-    if (mediaModule.onSessionsChanged) {
-      mediaSessionsUnsubscribe = mediaModule.onSessionsChanged(() => broadcastMediaSessions())
+  if (process.platform === 'win32') {
+    const mediaModule = getWindowsMediaSessionsModule()
+    if (!mediaModule) {
+      console.warn('[MediaSessions] Paquete no instalado. Ejecuta: npm install windows-media-sessions')
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+      return
     }
-    mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
-  } catch (err: any) {
-    console.warn('[MediaSessions] No disponible:', err.message)
-    mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    try {
+      broadcastMediaSessions()
+      if (mediaModule.onSessionsChanged) {
+        mediaSessionsUnsubscribe = mediaModule.onSessionsChanged(() => broadcastMediaSessions())
+      }
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    } catch (err: any) {
+      console.warn('[MediaSessions] No disponible:', err.message)
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    }
+  } else if (process.platform === 'linux') {
+    broadcastMediaSessions()
+    if (!mediaSessionsPollTimer) {
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    }
   }
 }
 
@@ -860,8 +1147,10 @@ function stopMediaSessionsBridge(): void {
     mediaSessionsUnsubscribe()
     mediaSessionsUnsubscribe = null
   }
-  const mediaModule = getWindowsMediaSessionsModule()
-  if (mediaModule?.shutdown) mediaModule.shutdown().catch(() => { })
+  if (process.platform === 'win32') {
+    const mediaModule = getWindowsMediaSessionsModule()
+    if (mediaModule?.shutdown) mediaModule.shutdown().catch(() => { })
+  }
 }
 
 // ── Suspend / Resume activities during gameplay ──
