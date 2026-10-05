@@ -1021,6 +1021,9 @@ function App(): React.JSX.Element {
   const [sgdbSearch, setSgdbSearch] = useState('')
   const [sgdbResults, setSgdbResults] = useState<SteamGridGame[]>([])
   const [sgdbLoading, setSgdbLoading] = useState(false)
+  // ¿Se hizo ya alguna búsqueda? (para no mostrar "sin resultados" al abrir)
+  const [sgdbSearched, setSgdbSearched] = useState(false)
+  const [sgdbError, setSgdbError] = useState<string | null>(null)
   const [sgdbSelectedGame, setSgdbSelectedGame] = useState<SteamGridGame | null>(null)
   const [sgdbArtType, setSgdbArtType] = useState<SteamGridArtType>('grids')
   const [sgdbImages, setSgdbImages] = useState<SteamGridImage[]>([])
@@ -2790,11 +2793,19 @@ function App(): React.JSX.Element {
 
   // ── SteamGridDB handlers ──
   const handleSgdbSearch = useCallback(async () => {
-    if (!sgdbSearch.trim()) return
+    // Campo vacío: limpiar el listado y el mensaje de "sin resultados"
+    if (!sgdbSearch.trim()) {
+      setSgdbResults([])
+      setSgdbSearched(false)
+      setSgdbError(null)
+      return
+    }
     setSgdbLoading(true)
     setSgdbResults([])
     setSgdbSelectedGame(null)
     setSgdbImages([])
+    setSgdbSearched(false)
+    setSgdbError(null)
     try {
       const res = await fetch(`${getBackendUrl()}/api/steamgrid/search?term=${encodeURIComponent(sgdbSearch.trim())}`)
       if (!res.ok) throw new Error('Error buscando en SteamGridDB')
@@ -2802,7 +2813,9 @@ function App(): React.JSX.Element {
       setSgdbResults(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('SteamGridDB search error:', err)
+      setSgdbError('No se pudo conectar con SteamGridDB. Inténtalo de nuevo.')
     } finally {
+      setSgdbSearched(true)
       setSgdbLoading(false)
     }
   }, [sgdbSearch])
@@ -2846,6 +2859,8 @@ function App(): React.JSX.Element {
     setSgdbSelectedGame(null)
     setSgdbImages([])
     setSgdbTargetGameId(null)
+    setSgdbSearched(false)
+    setSgdbError(null)
     setSgdbSelections({ square_grids: null, grids: null, heroes: null, logos: null, icons: null })
   }, [])
 
@@ -6619,6 +6634,11 @@ function App(): React.JSX.Element {
               </div>
             </div>
 
+            {/* Loading state */}
+            {sgdbLoading && !sgdbSelectedGame && (
+              <div className="sgdb-loading">Buscando...</div>
+            )}
+
             {/* Results list */}
             {sgdbResults.length > 0 && !sgdbSelectedGame && (
               <div className="sgdb-results-list">
@@ -6633,6 +6653,13 @@ function App(): React.JSX.Element {
                     {game.verified && <span className="sgdb-verified-badge">Verificado</span>}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Búsqueda sin resultados (o con error) */}
+            {!sgdbLoading && sgdbSearched && !sgdbSelectedGame && sgdbResults.length === 0 && (
+              <div className="sgdb-no-results">
+                {sgdbError ?? 'No se encontraron resultados.'}
               </div>
             )}
 
