@@ -27,7 +27,9 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "hls.js": "^1.7.2",
-    "lucide-react": "^1.42.0",
+    "lucide-react": "^1.42.0"
+  },
+  "optionalDependencies": {
     "win-media-control": "^0.1.1",
     "windows-media-sessions": "^1.0.3"
   },
@@ -51,5 +53,11 @@
     "react-dom": "^19.2.1",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
+  },
+  "allowScripts": {
+    "electron@39.8.10": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true
   }
 }

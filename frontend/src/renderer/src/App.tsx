@@ -74,7 +74,7 @@ import RatingRP17 from './assets/ratings/RP17.png'
 import installIcon from './assets/images/install.png'
 import controllerImg from './assets/images/controller.png'
 import defaultHomeBackground from './assets/images/background-defauld.jpg'
-import appDefaultIcon from './assets/images/icono.png'
+import appDefaultIcon from './assets/images/ICONO.png'
 import { useSystemMedia } from './hooks/useSystemMedia'
 import hashiLogo from '../src/assets/images/HASHI_LOGO_BLANCO.svg'
 import {
@@ -5320,7 +5320,7 @@ function App(): React.JSX.Element {
                           className="form-input edit-game-input"
                           style={{ flex: 1 }}
                           type="text"
-                          placeholder="Ruta al .exe o acceso directo"
+                          placeholder="Ruta del ejecutable o acceso directo"
                           value={formExePath}
                           onChange={(e) => setFormExePath(e.target.value)}
                           readOnly={isSteamEdit}
