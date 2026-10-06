@@ -119,6 +119,55 @@ function findProton(): string | null {
   return null
 }
 
+// ── Limpieza de reenviadores `steam://` colgados dentro del prefijo ──
+/**
+ * Elimina los `steam.exe` de Wine que quedan colgados reenviando una URL
+ * `steam://...` dentro del prefijo indicado.
+ *
+ * Al lanzar un juego con Steamworks sin crackear (p. ej. Hollow Knight:
+ * Silksong), el juego ejecuta `steam://run/<appid>`: Proton lo reenvía a
+ * Steam nativo y ese `steam.exe` se queda vivo para siempre en la sesión de
+ * Wine. Mientras exista, el anticheat de miHoYo (mhypbase, Zenless Zone Zero)
+ * entra en recursión infinita al inicializar su driver (`initDriver Failed:
+ * Error [4,1114,0]`) y el juego crashea al arrancar con Steam abierto o no.
+ *
+ * Solo mata procesos cuyo ejecutable termine en `steam.exe`, con un argumento
+ * `steam://` y con un `WINEPREFIX` que coincida con el prefijo dado: nunca toca
+ * el wrapper `steam.exe <juego>` que Proton usa para arrancar partidas, ni
+ * procesos de otros prefijos. Devuelve el número de procesos eliminados.
+ */
+function killHungSteamUrlForwarders(prefixPath: string | undefined | null): number {
+  if (IS_WIN || !prefixPath) return 0
+  const normPrefix = String(prefixPath).replace(/\/+$/, '')
+  let killed = 0
+  let entries: string[]
+  try {
+    entries = fs.readdirSync('/proc')
+  } catch {
+    return 0 // sin /proc (p. ej. macOS): no hay nada que limpiar
+  }
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue
+    try {
+      const args = fs.readFileSync(`/proc/${entry}/cmdline`, 'utf8').split('\0').filter(Boolean)
+      if (args.length < 2) continue
+      if (!args[0].toLowerCase().endsWith('steam.exe')) continue
+      const url = args.slice(1).find((arg) => /^steam:\/\//i.test(arg))
+      if (!url) continue
+      const env = fs.readFileSync(`/proc/${entry}/environ`, 'utf8').split('\0')
+      const wineprefix = env.find((value) => value.startsWith('WINEPREFIX='))
+      if (!wineprefix) continue
+      const value = wineprefix.slice('WINEPREFIX='.length).replace(/\/+$/, '')
+      if (value !== normPrefix && !value.startsWith(`${normPrefix}/`)) continue
+      process.kill(Number(entry), 'SIGKILL')
+      killed += 1
+      console.log(`[Launch] Steam: reenviador colgado eliminado (pid ${entry}: ${url})`)
+    } catch {
+      // el proceso ya terminó, sin permisos o no admite signals: ignorar
+    }
+  }
+  return killed
+}
 
 // Permitir autoplay de video con sonido sin interacción del usuario (boot video)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -1927,6 +1976,10 @@ app.whenReady().then(() => {
           // ignore
         }
 
+        // Steam: elimina reenviadores steam:// colgados de partidas anteriores
+        // (Silksong los deja y rompen el anticheat de juegos como ZZZ)
+        killHungSteamUrlForwarders(join(compatDataPath, 'pfx'))
+
         const gameEnv = {
           ...process.env,
           STEAM_COMPAT_CLIENT_INSTALL_PATH: steamInstallPath,
@@ -1956,6 +2009,7 @@ app.whenReady().then(() => {
           WINEESYNC: process.env.WINEESYNC ?? '1',
           WINEFSYNC: process.env.WINEFSYNC ?? '1'
         }
+        killHungSteamUrlForwarders(process.env.WINEPREFIX ?? join(USER_HOME, '.wine'))
         const child = spawn('sh', ['-c', 'ulimit -n 524288 2>/dev/null || true; exec "$0" "$@"', wine, exePath], {
           detached: true,
           cwd,
