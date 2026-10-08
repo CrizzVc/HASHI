@@ -6562,12 +6562,6 @@ function App(): React.JSX.Element {
       {bootVideoPreview && (
         <div className="modal-overlay boot-video-preview-overlay" onClick={() => { setBootVideoPreview(null); setBootVideoPreviewItem(null) }}>
           <div className="boot-video-preview-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">{t.bootVideoPreview}</h2>
-              <button className="modal-close" onClick={() => { setBootVideoPreview(null); setBootVideoPreviewItem(null) }}>
-                <CloseIcon size={20} />
-              </button>
-            </div>
             <video
               src={bootVideoPreview}
               className="boot-video-preview-player"
