@@ -1761,7 +1761,7 @@ function App(): React.JSX.Element {
     const loadSteamAccount = async (): Promise<void> => {
       try {
         const account = await window.api.getSteamAccount()
-        console.log(`[App] Loaded Steam account: linked=${account?.linked}, steamId=${account?.steamId}, steamId64=${account?.steamId64}, accountName=${account?.accountName}`)
+        // ──  console.log(`[App] Loaded Steam account: linked=${account?.linked}, steamId=${account?.steamId}, steamId64=${account?.steamId64}, accountName=${account?.accountName}`) ──
         setSteamAccount({
           linked: !!account?.linked,
           apiKey: account?.apiKey || DEFAULT_STEAM_API_KEY,
@@ -3197,6 +3197,17 @@ function App(): React.JSX.Element {
         return
       }
 
+      // ── Boot video preview overlay: Escape cierra solo el preview, no Ajustes ──
+      if (bootVideoPreview) {
+        if (e.key === 'Escape' || e.key === 'BrowserBack') {
+          e.preventDefault()
+          playClose()
+          setBootVideoPreview(null)
+          setBootVideoPreviewItem(null)
+        }
+        return
+      }
+
       if (modal !== null) {
         if (e.key === 'Escape') {
           e.preventDefault()
@@ -3204,6 +3215,29 @@ function App(): React.JSX.Element {
           if (modal === 'steamgrid') resetSgdbState()
           if (modal === 'addGame' || modal === 'editGame') resetForm()
           setModal(null)
+          return
+        }
+        // ── Ajustes: navegar entre pestañas con las flechas ──
+        if (modal === 'settings') {
+          // No robar las flechas a los <select> (cambian de opción con ellas)
+          if (e.target instanceof HTMLSelectElement) return
+          const settingsTabs = ['inicio', 'personalizacion', 'ayuda', 'bootvideo'] as const
+          const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0
+          if (step !== 0) {
+            e.preventDefault()
+            const currentIndex = Math.max(0, settingsTabs.indexOf(settingsTab))
+            const nextIndex = (currentIndex + step + settingsTabs.length) % settingsTabs.length
+            if (nextIndex !== currentIndex) {
+              playMove()
+              setSettingsTab(settingsTabs[nextIndex])
+              const nextTab = settingsTabs[nextIndex]
+              requestAnimationFrame(() => {
+                document
+                  .querySelector<HTMLButtonElement>(`[data-settings-nav="${nextTab}"]`)
+                  ?.focus({ preventScroll: true })
+              })
+            }
+          }
         }
         return
       }
@@ -3673,7 +3707,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, showHelperModal, pendingQuickApp, showDownloadsModal, nativeView, activeEmbeddedView, activeExtension, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, downloadContextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal, resetSgdbState])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, showHelperModal, pendingQuickApp, showDownloadsModal, nativeView, activeEmbeddedView, activeExtension, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, downloadContextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal, resetSgdbState, bootVideoPreview, settingsTab])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {
@@ -5867,6 +5901,7 @@ function App(): React.JSX.Element {
               <nav className="settings-sidebar-nav">
                 <button
                   type="button"
+                  data-settings-nav="inicio"
                   className={`settings-nav-item ${settingsTab === 'inicio' ? 'active' : ''}`}
                   onClick={() => setSettingsTab('inicio')}
                 >
@@ -5875,6 +5910,7 @@ function App(): React.JSX.Element {
                 </button>
                 <button
                   type="button"
+                  data-settings-nav="personalizacion"
                   className={`settings-nav-item ${settingsTab === 'personalizacion' ? 'active' : ''}`}
                   onClick={() => setSettingsTab('personalizacion')}
                 >
@@ -5883,6 +5919,7 @@ function App(): React.JSX.Element {
                 </button>
                 <button
                   type="button"
+                  data-settings-nav="ayuda"
                   className={`settings-nav-item ${settingsTab === 'ayuda' ? 'active' : ''}`}
                   onClick={() => setSettingsTab('ayuda')}
                 >
@@ -5891,6 +5928,7 @@ function App(): React.JSX.Element {
                 </button>
                 <button
                   type="button"
+                  data-settings-nav="bootvideo"
                   className={`settings-nav-item ${settingsTab === 'bootvideo' ? 'active' : ''}`}
                   onClick={() => setSettingsTab('bootvideo')}
                 >

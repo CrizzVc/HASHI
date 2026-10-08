@@ -1886,6 +1886,13 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* Quitar el anillo de foco por defecto de Chromium (borde mostaza al
+   navegar con flechas); la pestaña activa ya muestra el resaltado */
+.settings-nav-item:focus,
+.settings-nav-item:focus-visible {
+  outline: none;
+}
+
 .settings-nav-item.active {
   color: #ffffff;
   background: #242428;
