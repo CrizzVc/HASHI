@@ -1,6 +1,6 @@
 appId: com.hashi.app
 productName: HASHI
-icon: src/renderer/src/assets/images/icono.png
+icon: src/renderer/src/assets/images/ICONO.png
 directories:
   buildResources: build
 files:
@@ -31,7 +31,7 @@ asarUnpack:
   - node_modules/win-media-control/scripts/**
 win:
   executableName: HASHI
-  icon: src/renderer/src/assets/images/icono.png
+  icon: src/renderer/src/assets/images/ICONO.png
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -53,8 +53,10 @@ linux:
     - AppImage
     - snap
     - deb
-  maintainer: electronjs.org
-  category: Utility
+  executableName: hashi
+  synopsis: Game launcher
+  maintainer: HASHI <hashi@example.com>
+  category: Game
 appImage:
   artifactName: ${name}-${version}.${ext}
 npmRebuild: false

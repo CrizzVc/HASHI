@@ -29,5 +29,44 @@
 
 
 
-<!-- backend: npm start -->
-<!-- Frontend: npm run dev-->
+## DESARROLLO
+
+```bash
+# 1. Backend (API de logros, noticias, artwork…)
+cd backend
+npm install
+
+# 2. Frontend (Electron + React)
+cd ../frontend
+npm install
+npm run dev
+```
+
+En desarrollo el launcher arranca el backend solo (puerto `3000`). Si ya tienes
+otro backend corriendo en ese puerto lo reutiliza en vez de duplicarlo; también
+puedes levantarlo a mano con `npm start` dentro de `backend/`.
+
+### Notas para Linux
+
+- **npm bloquea scripts de instalación**: si `npm install` termina sin binario,
+  aprueba los scripts con `npm install-scripts approve electron esbuild` y
+  relanza `npm install` (o `node node_modules/electron/install.js`).
+- **Steam**: se detectan `~/.steam/steam`, `~/.local/share/Steam`, las
+  instalaciones de Flatpak (`~/.var/app/com.valvesoftware.Steam`) y Snap, además
+  de las bibliotecas declaradas en `libraryfolders.vdf`.
+- **Tiendas**: además de Steam, se usa [Heroic](https://heroicgameslauncher.com)
+  para Epic/GOG (GOG Galaxy y el launcher de Epic no existen en Linux).
+- **Juegos `.exe` locales**: se lanzan con **Wine** si está instalado
+  (`wine` en el PATH). Proton es el fork de Wine de Valve, afinado para juegos
+  y ligado a Steam; para lanzar un `.exe` fuera de Steam, Wine es lo directo.
+- **Juegos nativos**: binarios, `.sh`, AppImage y `.desktop` se lanzan tal cual.
+- **Multimedia del sistema** (MediaSession/PowerShell) es solo Windows: en Linux
+  esas funciones quedan desactivadas automáticamente.
+
+### Builds
+
+```bash
+npm run build:win    # Windows (NSIS)
+npm run build:linux  # Linux (AppImage, snap, deb)
+npm run build:mac    # macOS
+```

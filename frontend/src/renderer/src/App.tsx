@@ -32,6 +32,7 @@ import DownloadCompleteNotification from './components/DownloadCompleteNotificat
 import BootVideoNotification, { BootVideoNotificationData } from './components/BootVideoNotification'
 import defaultBootHtmlUrl from './assets/boot.html?url'
 import UpdateNotification, { UpdateNotificationData } from './components/UpdateNotification'
+import LaunchErrorNotification, { LaunchErrorNotificationData } from './components/LaunchErrorNotification'
 import { DownloadsModal } from './components/DownloadsModal'
 import { ModalHelper } from './components/ModalHelper'
 
@@ -74,7 +75,7 @@ import RatingRP17 from './assets/ratings/RP17.png'
 import installIcon from './assets/images/install.png'
 import controllerImg from './assets/images/controller.png'
 import defaultHomeBackground from './assets/images/background-defauld.jpg'
-import appDefaultIcon from './assets/images/icono.png'
+import appDefaultIcon from './assets/images/ICONO.png'
 import { useSystemMedia } from './hooks/useSystemMedia'
 import hashiLogo from '../src/assets/images/HASHI_LOGO_BLANCO.svg'
 import {
@@ -611,6 +612,8 @@ function App(): React.JSX.Element {
   const [updateMessage, setUpdateMessage] = useState<string | null>(null)
   const [updateLink, setUpdateLink] = useState<string | null>(null)
   const [updateNotification, setUpdateNotification] = useState<UpdateNotificationData | null>(null)
+  // Fallos al lanzar un juego (ejecutable inexistente, Wine ausente, etc.)
+  const [launchErrors, setLaunchErrors] = useState<LaunchErrorNotificationData[]>([])
   const [appVersion, setAppVersion] = useState<string>(DEFAULT_APP_VERSION)
   const [settingsWallpaperPage, setSettingsWallpaperPage] = useState(0)
   const [, setLogoClicks] = useState(0)
@@ -1018,6 +1021,9 @@ function App(): React.JSX.Element {
   const [sgdbSearch, setSgdbSearch] = useState('')
   const [sgdbResults, setSgdbResults] = useState<SteamGridGame[]>([])
   const [sgdbLoading, setSgdbLoading] = useState(false)
+  // ¿Se hizo ya alguna búsqueda? (para no mostrar "sin resultados" al abrir)
+  const [sgdbSearched, setSgdbSearched] = useState(false)
+  const [sgdbError, setSgdbError] = useState<string | null>(null)
   const [sgdbSelectedGame, setSgdbSelectedGame] = useState<SteamGridGame | null>(null)
   const [sgdbArtType, setSgdbArtType] = useState<SteamGridArtType>('grids')
   const [sgdbImages, setSgdbImages] = useState<SteamGridImage[]>([])
@@ -1947,6 +1953,26 @@ function App(): React.JSX.Element {
     return unsubscribe
   }, [])
 
+  // ── Listen for launch errors (ejecutable inexistente, Wine ausente…) ──
+  useEffect(() => {
+    // El preload sólo se recarga al reiniciar Electron; si el renderer se
+    // recarga antes, la API aún no existe. Nunca debe tumbar la app.
+    if (typeof window.api.onGameLaunchError !== 'function') {
+      console.warn('[App] onGameLaunchError no disponible en este preload')
+      return
+    }
+    const unsubscribe = window.api.onGameLaunchError((data) => {
+      const entry: LaunchErrorNotificationData = {
+        id: `launch-${data.code}-${Date.now()}`,
+        code: data.code as LaunchErrorNotificationData['code'],
+        detail: data.detail
+      }
+      // Como mucho 3 avisos a la vez para no tapar la interfaz
+      setLaunchErrors((prev) => [...prev, entry].slice(-3))
+    })
+    return unsubscribe
+  }, [])
+
   // ── Listen for game-session-start (launcher hides, suspend activities) ──
   useEffect(() => {
     const unsubscribe = window.api.onGameSessionStart((data) => {
@@ -2767,11 +2793,19 @@ function App(): React.JSX.Element {
 
   // ── SteamGridDB handlers ──
   const handleSgdbSearch = useCallback(async () => {
-    if (!sgdbSearch.trim()) return
+    // Campo vacío: limpiar el listado y el mensaje de "sin resultados"
+    if (!sgdbSearch.trim()) {
+      setSgdbResults([])
+      setSgdbSearched(false)
+      setSgdbError(null)
+      return
+    }
     setSgdbLoading(true)
     setSgdbResults([])
     setSgdbSelectedGame(null)
     setSgdbImages([])
+    setSgdbSearched(false)
+    setSgdbError(null)
     try {
       const res = await fetch(`${getBackendUrl()}/api/steamgrid/search?term=${encodeURIComponent(sgdbSearch.trim())}`)
       if (!res.ok) throw new Error('Error buscando en SteamGridDB')
@@ -2779,7 +2813,9 @@ function App(): React.JSX.Element {
       setSgdbResults(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('SteamGridDB search error:', err)
+      setSgdbError('No se pudo conectar con SteamGridDB. Inténtalo de nuevo.')
     } finally {
+      setSgdbSearched(true)
       setSgdbLoading(false)
     }
   }, [sgdbSearch])
@@ -2823,6 +2859,8 @@ function App(): React.JSX.Element {
     setSgdbSelectedGame(null)
     setSgdbImages([])
     setSgdbTargetGameId(null)
+    setSgdbSearched(false)
+    setSgdbError(null)
     setSgdbSelections({ square_grids: null, grids: null, heroes: null, logos: null, icons: null })
   }, [])
 
@@ -5320,7 +5358,7 @@ function App(): React.JSX.Element {
                           className="form-input edit-game-input"
                           style={{ flex: 1 }}
                           type="text"
-                          placeholder="Ruta al .exe o acceso directo"
+                          placeholder="Ruta del ejecutable o acceso directo"
                           value={formExePath}
                           onChange={(e) => setFormExePath(e.target.value)}
                           readOnly={isSteamEdit}
@@ -6596,6 +6634,11 @@ function App(): React.JSX.Element {
               </div>
             </div>
 
+            {/* Loading state */}
+            {sgdbLoading && !sgdbSelectedGame && (
+              <div className="sgdb-loading">Buscando...</div>
+            )}
+
             {/* Results list */}
             {sgdbResults.length > 0 && !sgdbSelectedGame && (
               <div className="sgdb-results-list">
@@ -6610,6 +6653,13 @@ function App(): React.JSX.Element {
                     {game.verified && <span className="sgdb-verified-badge">Verificado</span>}
                   </button>
                 ))}
+              </div>
+            )}
+
+            {/* Búsqueda sin resultados (o con error) */}
+            {!sgdbLoading && sgdbSearched && !sgdbSelectedGame && sgdbResults.length === 0 && (
+              <div className="sgdb-no-results">
+                {sgdbError ?? 'No se encontraron resultados.'}
               </div>
             )}
 
@@ -6824,6 +6874,22 @@ function App(): React.JSX.Element {
             onDismiss={() => setUpdateNotification(null)}
             language={language}
           />
+        </div>
+      )}
+
+      {/* ── Launch Error Notifications ── */}
+      {launchErrors.length > 0 && (
+        <div className="notification-container">
+          {launchErrors.map((err) => (
+            <LaunchErrorNotification
+              key={err.id}
+              id={err.id}
+              code={err.code}
+              detail={err.detail}
+              onDismiss={(id) => setLaunchErrors((prev) => prev.filter((n) => n.id !== id))}
+              language={language}
+            />
+          ))}
         </div>
       )}
 

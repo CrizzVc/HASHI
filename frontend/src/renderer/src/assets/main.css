@@ -3134,6 +3134,14 @@
   font-size: 13px;
 }
 
+/* Mensaje tras una búsqueda de juegos sin coincidencias (o con error) */
+.sgdb-no-results {
+  text-align: center;
+  padding: 32px 20px;
+  color: var(--gbl-text-muted);
+  font-size: 13px;
+}
+
 /* biblioteca card css */
 
 /* Contenedor principal para agrupar las tarjetas y el texto flotante */
@@ -6184,6 +6192,16 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.45);
   font-weight: 400;
+}
+
+/* Ruta o mensaje del sistema que provocó el fallo de lanzamiento */
+.notification-detail {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Consolas', 'DejaVu Sans Mono', monospace;
+  color: rgba(255, 255, 255, 0.3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .notification-card-update {

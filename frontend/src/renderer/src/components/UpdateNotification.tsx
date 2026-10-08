@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import appDefaultIcon from '../assets/images/icono.png'
+import appDefaultIcon from '../assets/images/ICONO.png'
 import hashiLogo from '../assets/images/HASHI_LOGO_BLANCO.svg'
 import { playNotification } from '../services/soundService'
 import { translations, Language } from '../translations'

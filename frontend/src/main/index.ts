@@ -3,12 +3,171 @@ import { join, dirname, extname, basename, normalize } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import steamLogoAsset from '../renderer/src/assets/tiendas/steamLogo.png?asset'
 import hashiLogoAsset from '../renderer/src/assets/images/HASHI_LOGO_BLANCO.svg?asset'
-import appIconAsset from '../renderer/src/assets/images/icono.png?asset'
+import appIconAsset from '../renderer/src/assets/images/ICONO.png?asset'
 import * as fs from 'fs'
 import * as crypto from 'crypto'
-import { spawn, fork, execSync, type ChildProcess } from 'child_process'
+import { spawn, fork, execSync, execFile, type ChildProcess } from 'child_process'
+import { promisify } from 'util'
 import * as http from 'http'
 import * as nodeNet from 'net'
+import * as os from 'os'
+
+// ── Multiplataforma ──
+// El launcher nació en Windows; estas banderas y helpers permiten que el mismo
+// código funcione también en Linux (y de paso en macOS) sin duplicar lógica.
+const IS_WIN = process.platform === 'win32'
+const IS_LINUX = process.platform === 'linux'
+const IS_POSIX = process.platform !== 'win32'
+const USER_HOME = os.homedir()
+
+/** Expande `~` al home del usuario (rutas de config de Steam, etc.). */
+function expandHome(value: string): string {
+  if (!value) return value
+  if (value === '~') return USER_HOME
+  if (value.startsWith('~/')) return join(USER_HOME, value.slice(2))
+  return value
+}
+
+/** Devuelve la primera ruta existente de la lista (ignora vacíos/undefined). */
+function firstExisting(paths: Array<string | undefined | null>): string | null {
+  for (const candidate of paths) {
+    if (!candidate) continue
+    const full = expandHome(candidate)
+    try {
+      if (fs.existsSync(full)) return full
+    } catch {
+      // ignore
+    }
+  }
+  return null
+}
+
+/** ¿El fichero tiene permiso de ejecución en POSIX? */
+function isPosixExecutable(file: string): boolean {
+  try {
+    return (fs.statSync(file).mode & 0o111) !== 0
+  } catch {
+    return false
+  }
+}
+
+/** Busca un binario en el PATH (solo POSIX). */
+function findInPath(binary: string): string | null {
+  if (IS_WIN) return null
+  for (const dir of (process.env.PATH || '').split(':').filter(Boolean)) {
+    const candidate = join(dir, binary)
+    try {
+      if (fs.existsSync(candidate) && isPosixExecutable(candidate)) return candidate
+    } catch {
+      // ignore
+    }
+  }
+  return null
+}
+
+/** Ruta de `wine` si está instalado (cacheada). Nulo en Windows. */
+let winePathCache: string | null | undefined
+function findWine(): string | null {
+  if (IS_WIN) return null
+  if (winePathCache !== undefined) return winePathCache
+  winePathCache =
+    firstExisting([
+      '/usr/bin/wine',
+      '/usr/local/bin/wine',
+      '/opt/wine-stable/bin/wine',
+      '/opt/wine/bin/wine'
+    ]) || findInPath('wine')
+  return winePathCache
+}
+
+/** Ruta del ejecutable `proton` de Steam si está instalado (cacheada). Nulo en Windows. */
+let protonPathCache: string | null | undefined
+function findProton(): string | null {
+  if (IS_WIN) return null
+  if (protonPathCache !== undefined) return protonPathCache
+
+  const searchDirs = [
+    join(USER_HOME, '.local/share/Steam/steamapps/common'),
+    join(USER_HOME, '.local/share/Steam/compatibilitytools.d'),
+    join(USER_HOME, '.steam/root/compatibilitytools.d'),
+    join(USER_HOME, '.steam/steam/steamapps/common'),
+    join(USER_HOME, '.var/app/com.valvesoftware.Steam/data/Steam/steamapps/common'),
+    join(USER_HOME, '.var/app/com.valvesoftware.Steam/data/Steam/compatibilitytools.d'),
+    '/usr/share/steam/compatibilitytools.d'
+  ]
+
+  for (const dir of searchDirs) {
+    if (!fs.existsSync(dir)) continue
+    try {
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
+      entries.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' }))
+      for (const entry of entries) {
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+        if (!entry.name.toLowerCase().includes('proton')) continue
+        const protonExec = join(dir, entry.name, 'proton')
+        if (fs.existsSync(protonExec)) {
+          protonPathCache = protonExec
+          return protonPathCache
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  protonPathCache = null
+  return null
+}
+
+// ── Limpieza de reenviadores `steam://` colgados dentro del prefijo ──
+/**
+ * Elimina los `steam.exe` de Wine que quedan colgados reenviando una URL
+ * `steam://...` dentro del prefijo indicado.
+ *
+ * Al lanzar un juego con Steamworks sin crackear (p. ej. Hollow Knight:
+ * Silksong), el juego ejecuta `steam://run/<appid>`: Proton lo reenvía a
+ * Steam nativo y ese `steam.exe` se queda vivo para siempre en la sesión de
+ * Wine. Mientras exista, el anticheat de miHoYo (mhypbase, Zenless Zone Zero)
+ * entra en recursión infinita al inicializar su driver (`initDriver Failed:
+ * Error [4,1114,0]`) y el juego crashea al arrancar con Steam abierto o no.
+ *
+ * Solo mata procesos cuyo ejecutable termine en `steam.exe`, con un argumento
+ * `steam://` y con un `WINEPREFIX` que coincida con el prefijo dado: nunca toca
+ * el wrapper `steam.exe <juego>` que Proton usa para arrancar partidas, ni
+ * procesos de otros prefijos. Devuelve el número de procesos eliminados.
+ */
+function killHungSteamUrlForwarders(prefixPath: string | undefined | null): number {
+  if (IS_WIN || !prefixPath) return 0
+  const normPrefix = String(prefixPath).replace(/\/+$/, '')
+  let killed = 0
+  let entries: string[]
+  try {
+    entries = fs.readdirSync('/proc')
+  } catch {
+    return 0 // sin /proc (p. ej. macOS): no hay nada que limpiar
+  }
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue
+    try {
+      const args = fs.readFileSync(`/proc/${entry}/cmdline`, 'utf8').split('\0').filter(Boolean)
+      if (args.length < 2) continue
+      if (!args[0].toLowerCase().endsWith('steam.exe')) continue
+      const url = args.slice(1).find((arg) => /^steam:\/\//i.test(arg))
+      if (!url) continue
+      const env = fs.readFileSync(`/proc/${entry}/environ`, 'utf8').split('\0')
+      const wineprefix = env.find((value) => value.startsWith('WINEPREFIX='))
+      if (!wineprefix) continue
+      const value = wineprefix.slice('WINEPREFIX='.length).replace(/\/+$/, '')
+      if (value !== normPrefix && !value.startsWith(`${normPrefix}/`)) continue
+      process.kill(Number(entry), 'SIGKILL')
+      killed += 1
+      console.log(`[Launch] Steam: reenviador colgado eliminado (pid ${entry}: ${url})`)
+    } catch {
+      // el proceso ya terminó, sin permisos o no admite signals: ignorar
+    }
+  }
+  return killed
+}
 
 // Permitir autoplay de video con sonido sin interacción del usuario (boot video)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -83,6 +242,8 @@ let tray: Tray | null = null
 // ── Backend Express server (proceso hijo) ──
 let backendProcess: ChildProcess | null = null
 let currentBackendPort = 3000
+/** Se resuelve con el puerto definitivo cuando termina la selección al arrancar. */
+let backendPortReady: Promise<number> | null = null
 
 function getBackendPortConfigPath(): string {
   return join(app.getPath('userData'), 'backend-port.json')
@@ -419,36 +580,149 @@ function createTray(): void {
   })
 }
 
-function startBackend(port?: number): void {
-  if (is.dev) return // En dev se corre manualmente con "npm run dev" en backend/
-
-  const backendDir = join(process.resourcesPath, 'backend')
-  const scriptPath = join(backendDir, 'src', 'app.js')
-  const resolvedPort = port || readBackendPort()
-  currentBackendPort = resolvedPort
-
-  try {
-    backendProcess = fork(scriptPath, {
-      cwd: backendDir,
-      env: {
-        ...process.env,
-        PORT: String(resolvedPort)
-      }
-    })
-
-    backendProcess.on('error', (err) => {
-      console.error('[Backend] Error starting:', err.message)
-    })
-
-    backendProcess.on('exit', (code) => {
-      console.log(`[Backend] Process exited with code ${code}`)
-      backendProcess = null
-    })
-
-    console.log(`[Backend] Started on port ${resolvedPort}`)
-  } catch (err: any) {
-    console.error('[Backend] Failed to start:', err.message)
+/** Ruta del backend según modo de ejecución (repo en dev, resources en prod). */
+function resolveBackendScript(): string | null {
+  if (is.dev) {
+    // electron-vite lanza electron desde frontend/ (o desde la raíz del repo)
+    return firstExisting([
+      join(process.cwd(), '..', 'backend', 'src', 'app.js'),
+      join(app.getAppPath(), '..', 'backend', 'src', 'app.js'),
+      join(app.getAppPath(), '..', '..', 'backend', 'src', 'app.js')
+    ])
   }
+  return join(process.resourcesPath, 'backend', 'src', 'app.js')
+}
+
+function getBackendLogPath(): string {
+  return join(app.getPath('userData'), 'backend.log')
+}
+
+/**
+ * ¿Ese puerto responde como backend HASHI? Evita "reutilizar" un proceso
+ * ajeno o huérfano que esté ocupando el puerto (luego no arrancaba nada y
+ * la app se quedaba sin backend).
+ */
+async function isHashiBackend(port: number): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 1500)
+    const res = await fetch(`http://127.0.0.1:${port}/api/health`, { signal: controller.signal })
+    clearTimeout(timer)
+    if (!res.ok) return false
+    const data: any = await res.json()
+    return data?.ok === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * stdout/stderr del backend → consola de este proceso (terminal de `npm run
+ * dev`) con el prefijo `[Backend]`, y además al fichero `backend.log`.
+ */
+function pipeBackendOutput(stream: NodeJS.ReadableStream | null, isError: boolean): void {
+  if (!stream) return
+  stream.setEncoding('utf8')
+  let buffer = ''
+  stream.on('data', (chunk: string) => {
+    buffer += chunk
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const tagged = `[Backend] ${line}`
+      if (isError) console.error(tagged)
+      else console.log(tagged)
+      try {
+        fs.appendFileSync(getBackendLogPath(), `${line}\n`)
+      } catch { /* no debe tumbar el launcher por un log */ }
+    }
+  })
+}
+
+function startBackend(port?: number): void {
+  if (backendProcess && !backendProcess.killed) return // ya está corriendo
+
+  const scriptPath = resolveBackendScript()
+  if (!scriptPath || !fs.existsSync(scriptPath)) {
+    console.warn(
+      is.dev
+        ? '[Backend] backend/src/app.js no encontrado; arráncalo a mano con "npm start" en backend/'
+        : '[Backend] Script no encontrado en resources/backend'
+    )
+    return
+  }
+
+  // En dev puede haber un backend levantado a mano: se reutiliza, pero sólo
+  // si de verdad responde como backend HASHI.
+  backendPortReady = (async (): Promise<number> => {
+    const saved = port || readBackendPort()
+
+    if (await isHashiBackend(saved)) {
+      currentBackendPort = saved
+      console.log(`[Backend] Puerto ${saved}: ya hay un backend HASHI corriendo; se reutiliza ese proceso.`)
+      return saved
+    }
+
+    // El puerto está ocupado por OTRA cosa → buscar el siguiente libre,
+    // porque "reutilizar" un proceso ajeno dejaba la app sin backend.
+    let target = saved
+    if (await checkPortInUse(target)) {
+      let free: number | null = null
+      for (let p = 3000; p <= 3020 && free === null; p++) {
+        if (p === target) continue
+        if (!(await checkPortInUse(p))) free = p
+      }
+      if (free === null) {
+        console.error('[Backend] No hay ningún puerto libre entre 3000 y 3020.')
+        return target
+      }
+      console.warn(`[Backend] Puerto ${target} ocupado por otro proceso → usando el ${free}.`)
+      target = free
+      saveBackendPort(target)
+    }
+    currentBackendPort = target
+
+    try {
+      fs.writeFileSync(
+        getBackendLogPath(),
+        `--- Backend ${new Date().toISOString()} · puerto ${target} ---\n`,
+        'utf8'
+      )
+    } catch { /* ignore */ }
+
+    try {
+      const backendDir = join(scriptPath, '..', '..')
+
+      // silent: true → redirigimos la salida nosotros con el prefijo [Backend]
+      const child = fork(scriptPath, {
+        cwd: backendDir,
+        env: {
+          ...process.env,
+          PORT: String(target)
+        },
+        silent: true
+      })
+      backendProcess = child
+      pipeBackendOutput(child.stdout, false)
+      pipeBackendOutput(child.stderr, true)
+
+      child.on('error', (err) => {
+        console.error('[Backend] Error starting:', err.message)
+      })
+
+      child.on('exit', (code) => {
+        console.log(`[Backend] Process exited with code ${code}`)
+        if (backendProcess === child) backendProcess = null
+      })
+
+      console.log(`[Backend] Started on port ${target}`)
+    } catch (err: any) {
+      console.error('[Backend] Failed to start:', err.message)
+    }
+
+    return target
+  })()
 }
 
 function stopBackend(): void {
@@ -465,6 +739,8 @@ function restartBackend(port: number): void {
 }
 
 function getWindowsMediaSessionsModule(): any {
+  // Solo Windows: el paquete arranca un binario .exe de fondo.
+  if (!IS_WIN) return null
   if (windowsMediaSessionsModule) return windowsMediaSessionsModule
   const candidates = [
     'windows-media-sessions',
@@ -495,8 +771,10 @@ function getWindowsMediaSessionsModule(): any {
 }
 
 function getWinMediaControlModule(): Promise<any> {
-  if (process.platform !== 'win32') return Promise.resolve(null)
+  if (!IS_WIN) return Promise.resolve(null)
   if (!winMediaControlModulePromise) {
+    // @ts-ignore — win-media-control solo existe en Windows (optionalDependencies),
+    // en Linux/macOS no está instalado y el import cae en el .catch() de abajo.
     winMediaControlModulePromise = import('win-media-control')
       .then((m) => {
         // En producción, win-media-control resuelve sus scripts con import.meta.url
@@ -587,45 +865,325 @@ function resolveMediaControlApp(target: any): string | undefined {
   return aumid || undefined
 }
 
-async function sendMediaControlAction(action: string, target: any): Promise<any> {
-  if (process.platform !== 'win32') return { success: false }
-  const media = await getWinMediaControlModule()
-  if (!media) return { success: false, error: 'win-media-control unavailable' }
-  const fnByAction: Record<string, any> = {
-    play_pause: media.togglePlayPause,
-    play: media.togglePlayPause,
-    pause: media.togglePlayPause,
-    toggle: media.togglePlayPause,
-    next: media.next,
-    prev: media.previous,
-    previous: media.previous
-  }
-  const fn = fnByAction[action]
-  if (!fn) return { success: false, error: 'unknown action' }
-  const app = resolveMediaControlApp(target)
+const execFileAsync = promisify(execFile)
+let hasCheckedLinuxMediaTools = false
+let hasPlayerctl = false
+let hasBusctl = false
+
+async function checkLinuxMediaTools(): Promise<void> {
+  if (hasCheckedLinuxMediaTools) return
+  hasCheckedLinuxMediaTools = true
   try {
-    let result = app !== undefined ? await fn(app) : await fn()
-    let ok = Array.isArray(result?.success) && result.success.length > 0
-    if (!ok && app !== undefined) {
-      result = await fn()
-      ok = Array.isArray(result?.success) && result.success.length > 0
-    }
-    setTimeout(broadcastMediaSessions, 350)
-    return { success: ok, ...result }
-  } catch (err: any) {
-    console.warn('[MediaControl]', action, err.message)
-    return { success: false, error: err.message }
+    const { stdout } = await execFileAsync('which', ['playerctl'], { timeout: 500 })
+    hasPlayerctl = Boolean(stdout.trim())
+  } catch {
+    hasPlayerctl = false
   }
+  try {
+    const { stdout } = await execFileAsync('which', ['busctl'], { timeout: 500 })
+    hasBusctl = Boolean(stdout.trim())
+  } catch {
+    hasBusctl = false
+  }
+}
+
+async function getLinuxMediaSessions(): Promise<any[]> {
+  if (process.platform !== 'linux') return []
+  await checkLinuxMediaTools()
+
+  if (hasPlayerctl) {
+    try {
+      const { stdout } = await execFileAsync(
+        'playerctl',
+        ['metadata', '-a', '--format', '{{playerName}}|||{{status}}|||{{title}}|||{{artist}}|||{{album}}|||{{mpris:artUrl}}|||{{position}}|||{{mpris:length}}'],
+        { timeout: 1500 }
+      )
+      const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+      const sessions: any[] = []
+      for (const line of lines) {
+        const parts = line.split('|||')
+        const playerName = parts[0]
+        if (!playerName) continue
+        const status = parts[1] || ''
+        const title = parts[2] || ''
+        const artist = parts[3] || ''
+        const albumTitle = parts[4] || ''
+        const artUrl = parts[5] || ''
+        const positionUs = parts[6] || '0'
+        const durationUs = parts[7] || '0'
+
+        let playbackStatus = 'opened'
+        const stLower = status.toLowerCase()
+        if (stLower === 'playing') playbackStatus = 'playing'
+        else if (stLower === 'paused') playbackStatus = 'paused'
+        else if (stLower === 'stopped') playbackStatus = 'stopped'
+
+        let thumbnail: string | undefined
+        if (artUrl) {
+          if (artUrl.startsWith('file://')) {
+            const filePath = decodeURIComponent(artUrl.replace(/^file:\/\//, ''))
+            if (fs.existsSync(filePath)) {
+              thumbnail = toMediaUrl(filePath)
+            }
+          } else if (artUrl.startsWith('http://') || artUrl.startsWith('https://')) {
+            thumbnail = artUrl
+          }
+        }
+
+        const posMs = Math.max(0, Math.round((Number(positionUs) || 0) / 1000))
+        const durMs = Math.max(0, Math.round((Number(durationUs) || 0) / 1000))
+
+        const appDisplayName =
+          playerName.toLowerCase() === 'spotify'
+            ? 'Spotify'
+            : playerName.toLowerCase() === 'firefox'
+            ? 'Firefox'
+            : playerName.toLowerCase().includes('chrome')
+            ? 'Chrome'
+            : playerName.charAt(0).toUpperCase() + playerName.slice(1)
+
+        sessions.push({
+          id: playerName,
+          sourceAppUserModelId: playerName,
+          sourceAppDisplayName: appDisplayName,
+          title: title || undefined,
+          artist: artist || undefined,
+          albumTitle: albumTitle || undefined,
+          thumbnail,
+          playbackStatus,
+          timeline: {
+            positionMs: posMs,
+            durationMs: durMs
+          },
+          controls: {
+            canPlay: true,
+            canPause: true,
+            canSkipNext: true,
+            canSkipPrevious: true
+          }
+        })
+      }
+      return sessions
+    } catch {}
+  }
+
+  if (hasBusctl) {
+    try {
+      const { stdout: busOut } = await execFileAsync('busctl', ['--user', 'list'], { timeout: 1000 })
+      const matches = Array.from(busOut.matchAll(/(org\.mpris\.MediaPlayer2\.[\w.-]+)/g))
+      const players = Array.from(new Set(matches.map((m) => m[1]))).filter(
+        (p) => !p.endsWith('.playerctld')
+      )
+      const sessions: any[] = []
+      for (const service of players) {
+        try {
+          const playerName = service.replace('org.mpris.MediaPlayer2.', '')
+          const { stdout: stOut } = await execFileAsync(
+            'busctl',
+            ['--user', 'get-property', service, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', 'PlaybackStatus'],
+            { timeout: 500 }
+          )
+          const statusMatch = stOut.match(/s\s+"([^"]+)"/)
+          const rawStatus = statusMatch ? statusMatch[1] : 'Playing'
+          let playbackStatus = 'opened'
+          if (rawStatus.toLowerCase() === 'playing') playbackStatus = 'playing'
+          else if (rawStatus.toLowerCase() === 'paused') playbackStatus = 'paused'
+          else if (rawStatus.toLowerCase() === 'stopped') playbackStatus = 'stopped'
+
+          const { stdout: metaOut } = await execFileAsync(
+            'busctl',
+            ['--user', 'get-property', service, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', 'Metadata'],
+            { timeout: 500 }
+          )
+
+          const titleMatch = metaOut.match(/"xesam:title"\s+s\s+"([^"]+)"/)
+          const artistMatch = metaOut.match(/"xesam:artist"\s+(?:as\s+\d+\s+)?(?:\[\s*)?"([^"]+)"/)
+          const albumMatch = metaOut.match(/"xesam:album"\s+s\s+"([^"]+)"/)
+          const artMatch = metaOut.match(/"mpris:artUrl"\s+s\s+"([^"]+)"/)
+          const durMatch = metaOut.match(/"mpris:length"\s+t\s+(\d+)/)
+
+          const title = titleMatch ? titleMatch[1] : undefined
+          const artist = artistMatch ? artistMatch[1] : undefined
+          const albumTitle = albumMatch ? albumMatch[1] : undefined
+          const artUrl = artMatch ? artMatch[1] : undefined
+          const durUs = durMatch ? durMatch[1] : '0'
+
+          let thumbnail: string | undefined
+          if (artUrl) {
+            if (artUrl.startsWith('file://')) {
+              const filePath = decodeURIComponent(artUrl.replace(/^file:\/\//, ''))
+              if (fs.existsSync(filePath)) {
+                thumbnail = toMediaUrl(filePath)
+              }
+            } else if (artUrl.startsWith('http://') || artUrl.startsWith('https://')) {
+              thumbnail = artUrl
+            }
+          }
+
+          const durMs = Math.max(0, Math.round((Number(durUs) || 0) / 1000))
+          const appDisplayName =
+            playerName.toLowerCase() === 'spotify'
+              ? 'Spotify'
+              : playerName.toLowerCase() === 'firefox'
+              ? 'Firefox'
+              : playerName.toLowerCase().includes('chrome')
+              ? 'Chrome'
+              : playerName.charAt(0).toUpperCase() + playerName.slice(1)
+
+          sessions.push({
+            id: playerName,
+            sourceAppUserModelId: playerName,
+            sourceAppDisplayName: appDisplayName,
+            title,
+            artist,
+            albumTitle,
+            thumbnail,
+            playbackStatus,
+            timeline: { positionMs: 0, durationMs: durMs },
+            controls: { canPlay: true, canPause: true, canSkipNext: true, canSkipPrevious: true }
+          })
+        } catch {}
+      }
+      return sessions
+    } catch {}
+  }
+
+  return []
+}
+
+async function sendLinuxMediaControlAction(action: string, target: any): Promise<any> {
+  if (process.platform !== 'linux') return { success: false }
+  await checkLinuxMediaTools()
+
+  const normAction =
+    action === 'play'
+      ? 'play'
+      : action === 'pause'
+      ? 'pause'
+      : action === 'next'
+      ? 'next'
+      : action === 'prev' || action === 'previous'
+      ? 'previous'
+      : 'play-pause'
+
+  let targetName = ''
+  if (target) {
+    if (typeof target === 'string') {
+      targetName = target
+    } else if (typeof target === 'object') {
+      targetName = target.appName || target.sourceAppUserModelId || ''
+    }
+  }
+
+  if (hasPlayerctl) {
+    try {
+      const args = targetName ? ['-p', targetName.toLowerCase(), normAction] : [normAction]
+      await execFileAsync('playerctl', args, { timeout: 1500 })
+      return { success: true }
+    } catch {
+      if (targetName) {
+        try {
+          await execFileAsync('playerctl', [normAction], { timeout: 1500 })
+          return { success: true }
+        } catch {}
+      }
+    }
+  }
+
+  if (hasBusctl) {
+    try {
+      const busAction =
+        normAction === 'play'
+          ? 'Play'
+          : normAction === 'pause'
+          ? 'Pause'
+          : normAction === 'next'
+          ? 'Next'
+          : normAction === 'previous'
+          ? 'Previous'
+          : 'PlayPause'
+
+      let service = ''
+      if (targetName) {
+        service = `org.mpris.MediaPlayer2.${targetName.toLowerCase()}`
+      } else {
+        const { stdout: busOut } = await execFileAsync('busctl', ['--user', 'list'], { timeout: 1000 })
+        const matches = Array.from(busOut.matchAll(/(org\.mpris\.MediaPlayer2\.[\w.-]+)/g))
+        const players = Array.from(new Set(matches.map((m) => m[1]))).filter(
+          (p) => !p.endsWith('.playerctld')
+        )
+        if (players.length > 0) service = players[0]
+      }
+
+      if (service) {
+        await execFileAsync(
+          'busctl',
+          ['--user', 'call', service, '/org/mpris/MediaPlayer2', 'org.mpris.MediaPlayer2.Player', busAction],
+          { timeout: 1500 }
+        )
+        return { success: true }
+      }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  }
+
+  return { success: false, error: 'No Linux media control utility available' }
+}
+
+async function sendMediaControlAction(action: string, target: any): Promise<any> {
+  if (IS_WIN) {
+    const media = await getWinMediaControlModule()
+    if (!media) return { success: false, error: 'win-media-control unavailable' }
+    const fnByAction: Record<string, any> = {
+      play_pause: media.togglePlayPause,
+      play: media.togglePlayPause,
+      pause: media.togglePlayPause,
+      toggle: media.togglePlayPause,
+      next: media.next,
+      prev: media.previous,
+      previous: media.previous
+    }
+    const fn = fnByAction[action]
+    if (!fn) return { success: false, error: 'unknown action' }
+    const app = resolveMediaControlApp(target)
+    try {
+      let result = app !== undefined ? await fn(app) : await fn()
+      let ok = Array.isArray(result?.success) && result.success.length > 0
+      if (!ok && app !== undefined) {
+        result = await fn()
+        ok = Array.isArray(result?.success) && result.success.length > 0
+      }
+      setTimeout(broadcastMediaSessions, 350)
+      return { success: ok, ...result }
+    } catch (err: any) {
+      console.warn('[MediaControl]', action, err.message)
+      return { success: false, error: err.message }
+    }
+  } else if (process.platform === 'linux') {
+    const res = await sendLinuxMediaControlAction(action, target)
+    setTimeout(broadcastMediaSessions, 350)
+    return res
+  }
+  return { success: false }
 }
 
 async function fetchMediaSessionsForRenderer(): Promise<any[]> {
   let sessions: any[] = []
-  const mediaModule = getWindowsMediaSessionsModule()
-  if (process.platform === 'win32' && mediaModule?.getAllSessions) {
+  if (process.platform === 'win32') {
+    const mediaModule = getWindowsMediaSessionsModule()
+    if (mediaModule?.getAllSessions) {
+      try {
+        sessions = await mediaModule.getAllSessions()
+      } catch (err: any) {
+        console.warn('[MediaSessions] fetch:', err.message)
+      }
+    }
+  } else if (process.platform === 'linux') {
     try {
-      sessions = await mediaModule.getAllSessions()
+      sessions = await getLinuxMediaSessions()
     } catch (err: any) {
-      console.warn('[MediaSessions] fetch:', err.message)
+      console.warn('[MediaSessions Linux] fetch:', err.message)
     }
   }
   return sessions
@@ -643,22 +1201,28 @@ function broadcastMediaSessions(): void {
 }
 
 function startMediaSessionsBridge(): void {
-  if (process.platform !== 'win32') return
-  const mediaModule = getWindowsMediaSessionsModule()
-  if (!mediaModule) {
-    console.warn('[MediaSessions] Paquete no instalado. Ejecuta: npm install windows-media-sessions')
-    mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
-    return
-  }
-  try {
-    broadcastMediaSessions()
-    if (mediaModule.onSessionsChanged) {
-      mediaSessionsUnsubscribe = mediaModule.onSessionsChanged(() => broadcastMediaSessions())
+  if (process.platform === 'win32') {
+    const mediaModule = getWindowsMediaSessionsModule()
+    if (!mediaModule) {
+      console.warn('[MediaSessions] Paquete no instalado. Ejecuta: npm install windows-media-sessions')
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+      return
     }
-    mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
-  } catch (err: any) {
-    console.warn('[MediaSessions] No disponible:', err.message)
-    mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    try {
+      broadcastMediaSessions()
+      if (mediaModule.onSessionsChanged) {
+        mediaSessionsUnsubscribe = mediaModule.onSessionsChanged(() => broadcastMediaSessions())
+      }
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    } catch (err: any) {
+      console.warn('[MediaSessions] No disponible:', err.message)
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    }
+  } else if (process.platform === 'linux') {
+    broadcastMediaSessions()
+    if (!mediaSessionsPollTimer) {
+      mediaSessionsPollTimer = setInterval(broadcastMediaSessions, 2500)
+    }
   }
 }
 
@@ -671,8 +1235,10 @@ function stopMediaSessionsBridge(): void {
     mediaSessionsUnsubscribe()
     mediaSessionsUnsubscribe = null
   }
-  const mediaModule = getWindowsMediaSessionsModule()
-  if (mediaModule?.shutdown) mediaModule.shutdown().catch(() => { })
+  if (process.platform === 'win32') {
+    const mediaModule = getWindowsMediaSessionsModule()
+    if (mediaModule?.shutdown) mediaModule.shutdown().catch(() => { })
+  }
 }
 
 // ── Suspend / Resume activities during gameplay ──
@@ -1066,10 +1632,15 @@ app.whenReady().then(() => {
   ipcMain.handle('select-game-file', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
-      filters: [
-        { name: 'Ejecutables y Accesos Directos', extensions: ['exe', 'lnk', 'bat', 'cmd', 'sh', 'app'] },
-        { name: 'Todos los archivos', extensions: ['*'] }
-      ]
+      filters: IS_WIN
+        ? [
+            { name: 'Ejecutables y Accesos Directos', extensions: ['exe', 'lnk', 'bat', 'cmd', 'sh', 'app'] },
+            { name: 'Todos los archivos', extensions: ['*'] }
+          ]
+        : [
+            { name: 'Ejecutables y accesos directos', extensions: ['sh', 'run', 'AppImage', 'desktop', 'bin', 'exe'] },
+            { name: 'Todos los archivos', extensions: ['*'] }
+          ]
     })
     if (!result.canceled && result.filePaths.length > 0) {
       return result.filePaths[0]
@@ -1089,25 +1660,81 @@ app.whenReady().then(() => {
   })
 
   // ── Steam game process monitoring ──
+  // Windows usa `tasklist` (nombres); Linux lee /proc, lo que además da la ruta
+  // real del binario y permite detectar el juego por su carpeta de instalación.
   const KNOWN_STEAM_PROCESSES = new Set([
+    // Windows
     'steam.exe', 'steamwebhelper.exe', 'gameoverlayui.exe', 'cef.helper.exe',
-    'crashhandler.exe', 'steamservice.exe'
+    'crashhandler.exe', 'steamservice.exe',
+    // Linux / macOS (sin extensión)
+    'steam', 'steamwebhelper', 'gameoverlayui', 'cef.helper', 'crashhandler',
+    'steamservice', 'steamerrorreporter', 'steamsessionhelper', 'reaper'
   ])
 
-  function getProcessNames(): Set<string> {
-    const names = new Set<string>()
-    try {
-      const out = execSync('tasklist /FO CSV /NH', { encoding: 'utf8', timeout: 5000 })
-      for (const line of out.split('\n')) {
-        const match = line.match(/"([^"]+)"/)
-        if (match) names.add(match[1].toLowerCase())
-      }
-    } catch { /* ignore */ }
-    return names
+  interface ProcessEntry {
+    pid: number
+    name: string
+    exe: string
   }
 
-  function findGameExeFromManifest(appId: string): string[] {
-    const exes: string[] = []
+  function getProcessSnapshot(): ProcessEntry[] {
+    const entries: ProcessEntry[] = []
+
+    if (IS_WIN) {
+      try {
+        const out = execSync('tasklist /FO CSV /NH', { encoding: 'utf8', timeout: 5000 })
+        let fakePid = 0
+        for (const line of out.split('\n')) {
+          const match = line.match(/"([^"]+)"/)
+          if (match) entries.push({ pid: fakePid++, name: match[1].toLowerCase(), exe: '' })
+        }
+      } catch { /* ignore */ }
+      return entries
+    }
+
+    // Linux: /proc da la ruta exacta del ejecutable de cada proceso
+    if (IS_LINUX) {
+      try {
+        for (const dirent of fs.readdirSync('/proc')) {
+          if (!/^\d+$/.test(dirent)) continue
+          let exe = ''
+          try {
+            exe = fs.readlinkSync(`/proc/${dirent}/exe`)
+          } catch {
+            // Procesos de otros usuarios o kernel threads: sin permisos
+          }
+          if (!exe) continue
+          entries.push({ pid: Number(dirent), name: basename(exe).toLowerCase(), exe })
+        }
+      } catch { /* ignore */ }
+    }
+
+    // macOS (o fallback si /proc no estuvo disponible)
+    if (entries.length === 0) {
+      try {
+        const out = execSync('ps -axo pid=,comm=', { encoding: 'utf8', timeout: 5000 })
+        for (const line of out.split('\n')) {
+          const match = line.trim().match(/^(\d+)\s+(.+)$/)
+          if (!match) continue
+          const exe = match[2].trim()
+          entries.push({ pid: Number(match[1]), name: basename(exe).toLowerCase(), exe })
+        }
+      } catch { /* ignore */ }
+    }
+
+    return entries
+  }
+
+  interface SteamGameTarget {
+    /** Nombres de ejecutables encontrados dentro de la carpeta del juego. */
+    names: string[]
+    /** Carpetas de instalación del juego (raíces de detección). */
+    roots: string[]
+  }
+
+  function findGameFromManifest(appId: string): SteamGameTarget {
+    const names: string[] = []
+    const roots: string[] = []
     try {
       const steamRoots = getSteamPaths()
       for (const root of steamRoots) {
@@ -1118,56 +1745,126 @@ app.whenReady().then(() => {
         if (!installdirMatch) continue
         const gameDir = join(root, 'steamapps', 'common', installdirMatch[1])
         if (!fs.existsSync(gameDir)) continue
+        roots.push(gameDir)
         const walk = (dir: string): void => {
           try {
             for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
               const fullPath = join(dir, entry.name)
-              if (entry.isDirectory()) walk(fullPath)
-              else if (entry.name.toLowerCase().endsWith('.exe')) exes.push(basename(fullPath).toLowerCase())
+              if (entry.isDirectory()) {
+                walk(fullPath)
+              } else {
+                const lower = entry.name.toLowerCase()
+                // Windows: .exe. Linux: cualquier fichero con permiso de ejecución.
+                if (lower.endsWith('.exe') || (IS_POSIX && isPosixExecutable(fullPath))) {
+                  names.push(lower)
+                }
+              }
             }
           } catch { /* ignore */ }
         }
         walk(gameDir)
-        if (exes.length > 0) break
+        if (roots.length > 0) break
       }
     } catch { /* ignore */ }
-    return exes
+    return { names: Array.from(new Set(names)), roots }
+  }
+
+  /** Lee un campo de /proc/<pid> (solo Linux); devuelve '' si no existe. */
+  function readProcField(pid: number, field: 'exe' | 'cwd' | 'cmdline'): string {
+    try {
+      if (field === 'cmdline') {
+        return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' ')
+      }
+      return fs.readlinkSync(`/proc/${pid}/${field}`)
+    } catch {
+      return ''
+    }
   }
 
   function monitorSteamGameProcess(appId: string, win: BrowserWindow, gameId: string, startTime: number): void {
-    const beforeProcs = getProcessNames()
+    const target = findGameFromManifest(appId)
+    const specificExes = new Set(target.names)
+    const gameRoots = target.roots
     const knownSteam = new Set<string>(KNOWN_STEAM_PROCESSES)
 
-    // Try to find specific exe names from manifest
-    const manifestExes = findGameExeFromManifest(appId)
-    const specificExes = new Set(manifestExes)
+    const before = getProcessSnapshot()
+    const beforePids = new Set(before.map((entry) => entry.pid))
+    const beforeNames = new Set(before.map((entry) => entry.name))
+
+    /** Pids que ya sabemos que son el juego (fallback cuando no hay manifest). */
+    const lockedPids = new Set<number>()
+
+    /** ¿El proceso pertenece a la carpeta de instalación del juego? */
+    const inGameFolder = (proc: ProcessEntry): boolean => {
+      if (gameRoots.length === 0) return false
+      const hit = (value: string): boolean =>
+        !!value && gameRoots.some((root) => value === root || value.startsWith(root + '/'))
+      if (hit(proc.exe)) return true
+      if (IS_LINUX) {
+        // Wine/Proton no ejecuta el .exe directamente: comprobamos cwd y cmdline
+        if (hit(readProcField(proc.pid, 'cwd'))) return true
+        if (hit(readProcField(proc.pid, 'cmdline'))) return true
+      }
+      return false
+    }
+
+    const isGameProcess = (proc: ProcessEntry): boolean => {
+      if (lockedPids.has(proc.pid)) return true
+      if (inGameFolder(proc)) return true
+      if (specificExes.size > 0 && specificExes.has(proc.name)) return true
+      // Último recurso (Windows): cualquier .exe nuevo que no sea de Steam
+      if (IS_WIN && !beforeNames.has(proc.name) && !knownSteam.has(proc.name) && proc.name.endsWith('.exe')) {
+        return true
+      }
+      // Último recurso (Linux): proceso nuevo lanzado desde el home del usuario
+      // (las binarias de sistema viven en /usr, /bin, etc. y no interesan).
+      if (IS_LINUX && !beforePids.has(proc.pid) && !knownSteam.has(proc.name)) {
+        const systemDirs = ['/usr/', '/bin/', '/sbin/', '/lib/', '/nix/store/', '/snap/', '/proc/']
+        if (proc.exe && !systemDirs.some((dir) => proc.exe.startsWith(dir))) return true
+      }
+      return false
+    }
 
     let gameDetected = false
     let stableCount = 0
 
     const interval = setInterval(() => {
-      if (!isGameRunning) { clearInterval(interval); return }
+      if (!isGameRunning) {
+        clearInterval(interval)
+        return
+      }
 
-      const currentProcs = getProcessNames()
+      const currentProcs = getProcessSnapshot()
 
       if (!gameDetected) {
-        // Look for new process that isn't Steam itself
-        for (const name of currentProcs) {
-          if (!beforeProcs.has(name) && !knownSteam.has(name)) {
-            // Either match specific exe from manifest, or any new .exe
-            if (specificExes.size === 0 || specificExes.has(name)) {
-              gameDetected = true
-              specificExes.add(name) // Lock to this specific process
-              break
+        if (IS_WIN) {
+          const currentNames = new Set(currentProcs.map((entry) => entry.name))
+          // Look for new process that isn't Steam itself
+          for (const name of currentNames) {
+            if (!beforeNames.has(name) && !knownSteam.has(name)) {
+              if (specificExes.size === 0 || specificExes.has(name)) {
+                gameDetected = true
+                specificExes.add(name) // Lock to this specific process
+                break
+              }
             }
           }
-        }
-        // Fallback: if specific exe wasn't found, check for any new non-steam process
-        if (!gameDetected) {
-          for (const name of currentProcs) {
-            if (!beforeProcs.has(name) && !knownSteam.has(name) && name.endsWith('.exe')) {
+          // Fallback: if specific exe wasn't found, check for any new .exe
+          if (!gameDetected) {
+            for (const name of currentNames) {
+              if (!beforeNames.has(name) && !knownSteam.has(name) && name.endsWith('.exe')) {
+                gameDetected = true
+                specificExes.add(name)
+                break
+              }
+            }
+          }
+        } else {
+          for (const proc of currentProcs) {
+            if (beforePids.has(proc.pid)) continue
+            if (isGameProcess(proc)) {
               gameDetected = true
-              specificExes.add(name)
+              lockedPids.add(proc.pid)
               break
             }
           }
@@ -1177,8 +1874,21 @@ app.whenReady().then(() => {
 
       // Game was detected — check if it's still running
       let gameStillRunning = false
-      for (const name of specificExes) {
-        if (currentProcs.has(name)) { gameStillRunning = true; break }
+      if (IS_WIN) {
+        const currentNames = new Set(currentProcs.map((entry) => entry.name))
+        for (const name of specificExes) {
+          if (currentNames.has(name)) {
+            gameStillRunning = true
+            break
+          }
+        }
+      } else {
+        for (const proc of currentProcs) {
+          if (lockedPids.has(proc.pid) || inGameFolder(proc) || specificExes.has(proc.name)) {
+            gameStillRunning = true
+            break
+          }
+        }
       }
 
       if (!gameStillRunning) {
@@ -1203,6 +1913,138 @@ app.whenReady().then(() => {
     setTimeout(() => clearInterval(interval), 4 * 60 * 60 * 1000)
   }
 
+  /** Códigos de fallo de lanzamiento (los traduce el renderer). */
+  type LaunchErrorCode = 'wine_missing' | 'not_found' | 'no_launcher' | 'spawn_failed' | 'unknown'
+
+  /**
+   * Avisa al renderer de un fallo de lanzamiento para que muestre un toast.
+   * El mensaje lo traduce el renderer a partir de `code`; `detail` (ruta o
+   * error del sistema) se muestra como línea secundaria.
+   */
+  function sendLaunchError(
+    win: BrowserWindow | null,
+    gameId: string,
+    code: LaunchErrorCode,
+    detail?: string | null
+  ): void {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('game-launch-error', { gameId, code, detail: detail ?? null })
+    }
+    console.warn(`[Launch] Fallo al lanzar (${code})${detail ? `: ${detail}` : ''}`)
+  }
+
+  /**
+   * Lanza el ejecutable de un juego local de forma desprendida (detached) para
+   * que el juego sobreviva si el launcher se cierra.
+   * - Windows: shell con comillas (respeta espacios y accesos directos).
+   * - Linux: binario nativo / AppImage directo, .sh con bash, .exe con Wine.
+   * Devuelve null si no hay forma de lanzarlo en esta plataforma.
+   */
+  function spawnGameProcess(exePath: string): ChildProcess | null {
+    let cwd = dirname(exePath)
+    try {
+      if (fs.statSync(exePath).isDirectory()) cwd = exePath
+    } catch {
+      // ignore
+    }
+
+    if (IS_WIN) {
+      const child = spawn(`"${exePath}"`, [], { detached: true, shell: true, cwd })
+      child.unref()
+      return child
+    }
+
+    const ext = extname(exePath).toLowerCase()
+
+    // Juego de Windows: prioriza Proton si está instalado en Steam, o Wine en su defecto
+    if (ext === '.exe') {
+      const proton = findProton()
+      const wine = findWine()
+
+      if (proton) {
+        const steamInstallPath =
+          firstExisting([
+            join(USER_HOME, '.local/share/Steam'),
+            join(USER_HOME, '.steam/steam'),
+            join(USER_HOME, '.var/app/com.valvesoftware.Steam/data/Steam')
+          ]) || join(USER_HOME, '.local/share/Steam')
+
+        const compatDataPath = join(USER_HOME, '.local/share/hashi/proton_prefix')
+        try {
+          fs.mkdirSync(compatDataPath, { recursive: true })
+        } catch {
+          // ignore
+        }
+
+        // Steam: elimina reenviadores steam:// colgados de partidas anteriores
+        // (Silksong los deja y rompen el anticheat de juegos como ZZZ)
+        killHungSteamUrlForwarders(join(compatDataPath, 'pfx'))
+
+        const gameEnv = {
+          ...process.env,
+          STEAM_COMPAT_CLIENT_INSTALL_PATH: steamInstallPath,
+          STEAM_COMPAT_DATA_PATH: compatDataPath,
+          WINEESYNC: process.env.WINEESYNC ?? '1',
+          WINEFSYNC: process.env.WINEFSYNC ?? '1'
+        }
+
+        const child = spawn(
+          'sh',
+          ['-c', 'ulimit -n 524288 2>/dev/null || true; exec "$0" "run" "$@"', proton, exePath],
+          {
+            detached: true,
+            cwd,
+            stdio: 'ignore',
+            env: gameEnv
+          }
+        )
+        child.unref()
+        return child
+      }
+
+      if (wine) {
+        // Eleva ulimit -n a 524288 para evitar crash por desbordamiento de descriptores en juegos pesados (Unity/Unreal/Esync/Fsync)
+        const gameEnv = {
+          ...process.env,
+          WINEESYNC: process.env.WINEESYNC ?? '1',
+          WINEFSYNC: process.env.WINEFSYNC ?? '1'
+        }
+        killHungSteamUrlForwarders(process.env.WINEPREFIX ?? join(USER_HOME, '.wine'))
+        const child = spawn('sh', ['-c', 'ulimit -n 524288 2>/dev/null || true; exec "$0" "$@"', wine, exePath], {
+          detached: true,
+          cwd,
+          stdio: 'ignore',
+          env: gameEnv
+        })
+        child.unref()
+        return child
+      }
+
+      return null
+    }
+
+    // Scripts (el .sh puede no ser ejecutable, así que lo pasamos al intérprete)
+    if (ext === '.sh' || ext === '.bash' || ext === '.run') {
+      const interpreter = firstExisting(['/bin/bash', '/usr/bin/bash', '/bin/sh']) || findInPath('bash') || '/bin/sh'
+      const child = spawn(interpreter, [exePath], { detached: true, cwd, stdio: 'ignore', env: process.env })
+      child.unref()
+      return child
+    }
+
+    // Binarios nativos y AppImage: garantizar permiso de ejecución
+    try {
+      if (!isPosixExecutable(exePath)) {
+        fs.chmodSync(exePath, fs.statSync(exePath).mode | 0o755)
+      }
+    } catch {
+      // ignore: si no se puede chmod, el spawn emitirá 'error'
+    }
+
+    const child = spawn(exePath, [], { detached: true, cwd, stdio: 'ignore', env: process.env })
+    child.unref()
+    return child
+  }
+
   ipcMain.handle('launch-game', async (event, gameId: string, exePath: string) => {
     const win = BrowserWindow.fromWebContents(event.sender)
 
@@ -1211,12 +2053,24 @@ app.whenReady().then(() => {
       const isSteamProtocol = /^steam:\/\//i.test(exePath)
       const fileExists = isSteamProtocol ? false : hasExecutable ? fs.existsSync(exePath) : false
       const ext = hasExecutable && fileExists ? extname(exePath).toLowerCase() : ''
-      const isTrackedExe = hasExecutable && fileExists && ext !== '.lnk' && ext !== '.url' && !isSteamProtocol
+      // Accesos directos: .lnk/.url en Windows, .desktop en Linux
+      const isShortcut = ext === '.lnk' || ext === '.url' || (IS_POSIX && ext === '.desktop')
+      const isTrackedExe = hasExecutable && fileExists && !isShortcut && !isSteamProtocol
 
       const startTime = Date.now()
 
       if (isTrackedExe) {
-        // Juego real (.exe) — ocultar launcher y suspender actividades
+        // Linux: un .exe necesita Proton o Wine. Se comprueba ANTES de ocultar el
+        // launcher para no dejar la sesión de juego colgada.
+        if (IS_POSIX && ext === '.exe' && !findProton() && !findWine()) {
+          sendLaunchError(win, gameId, 'wine_missing', exePath)
+          if (win && !win.isDestroyed()) {
+            win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
+          }
+          return { success: false, error: 'wine_missing', tracked: true, startTime }
+        }
+
+        // Juego real — ocultar launcher y suspender actividades
         isGameRunning = true
         suspendActivities()
         if (win && !win.isDestroyed()) {
@@ -1226,22 +2080,42 @@ app.whenReady().then(() => {
           win.webContents.send('game-session-start', { gameId })
         }
 
-        const child = spawn(`"${exePath}"`, [], {
-          detached: true,
-          shell: true,
-          cwd: dirname(exePath)
-        })
-
-        child.unref()
-
-        child.on('exit', () => {
+        // `failed` → el lanzamiento no llegó a producir sesión real, así que
+        // no se contabiliza tiempo de juego.
+        const endSession = (failed = false): void => {
+          if (!isGameRunning) return
           isGameRunning = false
           resumeActivities()
           if (win && !win.isDestroyed()) {
             showAfterGame(win)
             const durationMinutes = Math.round((Date.now() - startTime) / 60000)
-            win.webContents.send('game-exited', { gameId, durationMinutes: Math.max(1, durationMinutes) })
+            win.webContents.send('game-exited', {
+              gameId,
+              durationMinutes: failed ? 0 : Math.max(1, durationMinutes)
+            })
           }
+        }
+
+        let child: ChildProcess | null = null
+        try {
+          child = spawnGameProcess(exePath)
+        } catch (err) {
+          console.error('Error launching game:', err instanceof Error ? err.message : String(err))
+        }
+
+        if (!child) {
+          // No hay forma de lanzarlo (p.ej. .exe sin Wine): restaurar launcher
+          sendLaunchError(win, gameId, 'no_launcher', exePath)
+          endSession(true)
+          return { success: false, error: 'no_launcher', tracked: true, startTime }
+        }
+
+        child.on('exit', () => endSession())
+        // En POSIX un spawn fallido llega por 'error' (EACCES, ENOENT, ENOEXEC)
+        child.on('error', (err) => {
+          console.error('[Launch] spawn error:', err.message)
+          sendLaunchError(win, gameId, 'spawn_failed', err.message)
+          endSession(true)
         })
 
         return { success: true, tracked: true, startTime }
@@ -1279,24 +2153,32 @@ app.whenReady().then(() => {
         return { success: true, tracked: false, startTime, steamProtocol: true }
       }
 
+      // Ruta vacía o inexistente (disco externo desmontado, borrada, mal
+      // escrita…): avisar y deshacer el estado de "jugando" en vez de
+      // minimizar y simular una sesión de juego falsa.
+      if (!hasExecutable || !fileExists) {
+        sendLaunchError(win, gameId, 'not_found', exePath || null)
+        if (win && !win.isDestroyed()) {
+          win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
+        }
+        return { success: false, error: 'not_found', tracked: false, startTime }
+      }
+
       if (win) {
         win.minimize()
       }
 
-      if (!hasExecutable || !fileExists) {
-        setTimeout(() => {
+      if (isShortcut) {
+        const errMsg = await shell.openPath(exePath)
+        if (errMsg) {
+          sendLaunchError(win, gameId, 'spawn_failed', errMsg)
           if (win && !win.isDestroyed()) {
             win.restore()
             win.focus()
-            const simulatedMinutes = Math.floor(Math.random() * 4) + 2
-            win.webContents.send('game-exited', { gameId, durationMinutes: simulatedMinutes })
+            win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
           }
-        }, 4000)
-        return { success: true, tracked: false, startTime, simulated: true }
-      }
-
-      if (ext === '.lnk' || ext === '.url') {
-        await shell.openPath(exePath)
+          return { success: false, error: 'spawn_failed', tracked: false, startTime }
+        }
         setTimeout(() => {
           if (win && !win.isDestroyed()) {
             win.restore()
@@ -1311,9 +2193,11 @@ app.whenReady().then(() => {
       return { success: true, tracked: false, startTime }
     } catch (error: any) {
       console.error('Error launching game:', error)
+      sendLaunchError(win, gameId, 'unknown', error?.message)
       if (win && !win.isDestroyed() && !isGameRunning) {
         win.restore()
         win.focus()
+        win.webContents.send('game-exited', { gameId, durationMinutes: 0 })
       }
       return { success: false, error: error.message }
     }
@@ -1620,55 +2504,122 @@ app.whenReady().then(() => {
   })
 
   // ── Store detection & opening ──
-  const STORES = [
-    {
-      id: 'steam',
-      name: 'Steam',
-      exeCandidates: [
-        'C:\\Program Files (x86)\\Steam\\steam.exe',
-        'C:\\Program Files\\Steam\\steam.exe',
-        process.env.ProgramFiles + '\\Steam\\steam.exe',
-        (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\Steam\\steam.exe'
-      ]
-    },
-    {
-      id: 'epic',
-      name: 'Epic Games',
-      exeCandidates: [
-        (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe',
-        (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\Epic Games\\Launcher\\Portal\\Binaries\\Win32\\EpicGamesLauncher.exe',
-        process.env.ProgramFiles + '\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe'
-      ]
-    },
-    {
-      id: 'gog',
-      name: 'GOG Galaxy',
-      exeCandidates: [
-        (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\GOG Galaxy\\GalaxyClient.exe',
-        process.env.ProgramFiles + '\\GOG Galaxy\\GalaxyClient.exe',
-        (process.env.LocalAppData || process.env.APPDATA || '') + '\\GOG.com\\Galaxy\\GalaxyClient.exe'
-      ]
-    }
+  // Windows: rutas clásicas de "Program Files".
+  // Linux: Steam nativo/Flatpak/Snap y Heroic (cliente que gestiona Epic y GOG,
+  // ya que ni el launcher de Epic ni GOG Galaxy existen nativamente en Linux).
+  interface StoreDefinition {
+    id: string
+    name: string
+    /** Rutas absolutas candidatas (se expande `~`). */
+    exeCandidates: string[]
+    /** Binarios que se buscan en el PATH (solo POSIX). */
+    pathBinaries?: string[]
+    /** Apps Flatpak que sustituyen al binario nativo (solo POSIX). */
+    flatpakApps?: string[]
+  }
+
+  const HEROIC_CANDIDATES = [
+    '/usr/bin/heroic',
+    '/usr/local/bin/heroic',
+    '/opt/Heroic/heroic',
+    '~/.local/bin/heroic',
+    '~/Applications/Heroic'
   ]
 
-  const findStoreExe = (store): string | null => {
-    for (const candidate of store.exeCandidates) {
-      try {
-        if (candidate && fs.existsSync(candidate)) return candidate
-      } catch {
-        // ignore
+  const STORES: StoreDefinition[] = IS_WIN
+    ? [
+        {
+          id: 'steam',
+          name: 'Steam',
+          exeCandidates: [
+            'C:\\Program Files (x86)\\Steam\\steam.exe',
+            'C:\\Program Files\\Steam\\steam.exe',
+            process.env.ProgramFiles + '\\Steam\\steam.exe',
+            (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\Steam\\steam.exe'
+          ]
+        },
+        {
+          id: 'epic',
+          name: 'Epic Games',
+          exeCandidates: [
+            (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe',
+            (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\Epic Games\\Launcher\\Portal\\Binaries\\Win32\\EpicGamesLauncher.exe',
+            process.env.ProgramFiles + '\\Epic Games\\Launcher\\Portal\\Binaries\\Win64\\EpicGamesLauncher.exe'
+          ]
+        },
+        {
+          id: 'gog',
+          name: 'GOG Galaxy',
+          exeCandidates: [
+            (process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)') + '\\GOG Galaxy\\GalaxyClient.exe',
+            process.env.ProgramFiles + '\\GOG Galaxy\\GalaxyClient.exe',
+            (process.env.LocalAppData || process.env.APPDATA || '') + '\\GOG.com\\Galaxy\\GalaxyClient.exe'
+          ]
+        }
+      ]
+    : [
+        {
+          id: 'steam',
+          name: 'Steam',
+          exeCandidates: [
+            '/usr/bin/steam',
+            '/usr/local/bin/steam',
+            '/usr/lib/steam/steam',
+            '/snap/bin/steam',
+            '~/.local/share/Steam/steam.sh',
+            '~/.steam/steam/steam.sh',
+            '~/.steam/root/steam.sh'
+          ],
+          pathBinaries: ['steam'],
+          flatpakApps: ['com.valvesoftware.Steam']
+        },
+        {
+          id: 'epic',
+          name: 'Heroic (Epic)',
+          exeCandidates: HEROIC_CANDIDATES,
+          pathBinaries: ['heroic'],
+          flatpakApps: ['com.heroicgameslauncher.hgl']
+        },
+        {
+          id: 'gog',
+          name: 'Heroic (GOG)',
+          exeCandidates: HEROIC_CANDIDATES,
+          pathBinaries: ['heroic'],
+          flatpakApps: ['com.heroicgameslauncher.hgl']
+        }
+      ]
+
+  const findStoreExe = (store: StoreDefinition): string | null => {
+    const existing = firstExisting(store.exeCandidates)
+    if (existing) return existing
+    if (IS_POSIX) {
+      for (const binary of store.pathBinaries || []) {
+        const found = findInPath(binary)
+        if (found) return found
       }
     }
     return null
   }
 
+  /** ¿Está instalada una app Flatpak? (Linux) */
+  const isFlatpakInstalled = (appId: string): boolean => {
+    if (!IS_POSIX || !findInPath('flatpak')) return false
+    try {
+      execSync(`flatpak info ${appId}`, { encoding: 'utf8', timeout: 4000, stdio: 'ignore' })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   ipcMain.handle('get-stores', async () => {
     return STORES.map((store) => {
       const exePath = findStoreExe(store)
+      const installed = !!exePath || (!!store.flatpakApps && store.flatpakApps.some(isFlatpakInstalled))
       return {
         id: store.id,
         name: store.name,
-        installed: !!exePath,
+        installed,
         exePath
       }
     })
@@ -1677,11 +2628,32 @@ app.whenReady().then(() => {
   ipcMain.handle('open-store', async (_event, storeId: string) => {
     const store = STORES.find((s) => s.id === storeId)
     if (!store) return { success: false, error: 'Tienda desconocida' }
-    const exePath = findStoreExe(store)
-    if (!exePath) return { success: false, error: 'Tienda no instalada' }
     try {
-      const error = await shell.openPath(exePath)
-      return error ? { success: false, error } : { success: true }
+      if (IS_WIN) {
+        const exePath = findStoreExe(store)
+        if (!exePath) return { success: false, error: 'Tienda no instalada' }
+        const error = await shell.openPath(exePath)
+        return error ? { success: false, error } : { success: true }
+      }
+
+      // Linux: binario nativo (script de Steam, AppImage/binario de Heroic…)
+      const exePath = findStoreExe(store)
+      if (exePath) {
+        const child = spawn(exePath, [], { detached: true, stdio: 'ignore', env: process.env })
+        child.unref()
+        return { success: true }
+      }
+
+      // …o instalación Flatpak
+      const flatpakApp = (store.flatpakApps || []).find(isFlatpakInstalled)
+      const flatpakBin = flatpakApp ? findInPath('flatpak') : null
+      if (flatpakApp && flatpakBin) {
+        const child = spawn(flatpakBin, ['run', flatpakApp], { detached: true, stdio: 'ignore' })
+        child.unref()
+        return { success: true }
+      }
+
+      return { success: false, error: 'Tienda no instalada' }
     } catch (err: any) {
       return { success: false, error: err.message }
     }
@@ -1735,9 +2707,33 @@ app.whenReady().then(() => {
   })
 
   // ── Startup shortcut handlers ──
+  // Windows: acceso directo .lnk en la carpeta de inicio + LoginItemSettings.
+  // Linux: fichero .desktop en ~/.config/autostart (estándar XDG).
+  const getAutostartDesktopPath = (): string =>
+    join(process.env.XDG_CONFIG_HOME || join(USER_HOME, '.config'), 'autostart', 'hashi.desktop')
+
+  const writeAutostartEntry = (): void => {
+    const entryPath = getAutostartDesktopPath()
+    const entryDir = dirname(entryPath)
+    if (!fs.existsSync(entryDir)) fs.mkdirSync(entryDir, { recursive: true })
+    const contents = [
+      '[Desktop Entry]',
+      'Type=Application',
+      'Name=HASHI',
+      'Comment=HASHI Launcher',
+      `Exec="${process.execPath}"`,
+      `Path="${dirname(process.execPath)}"`,
+      'Terminal=false',
+      'X-GNOME-Autostart-enabled=true',
+      '',
+      ''
+    ].join('\n')
+    fs.writeFileSync(entryPath, contents, 'utf8')
+  }
+
   ipcMain.handle('create-startup-shortcut', async () => {
     try {
-      if (process.platform === 'win32') {
+      if (IS_WIN) {
         const startupDir = join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
         const shortcutPath = join(startupDir, 'HASHI.lnk')
         const target = process.execPath
@@ -1752,6 +2748,10 @@ app.whenReady().then(() => {
         })
         return { success: true }
       }
+      if (IS_POSIX) {
+        writeAutostartEntry()
+        return { success: true }
+      }
       return { success: false, error: 'No soportado' }
     } catch (err: any) {
       console.error('Error creating startup shortcut:', err)
@@ -1761,12 +2761,15 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-startup-status', async () => {
     try {
-      if (process.platform === 'win32') {
+      if (IS_WIN) {
         const startupDir = join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
         const shortcutPath = join(startupDir, 'HASHI.lnk')
         const exists = fs.existsSync(shortcutPath)
         const loginSettings = app.getLoginItemSettings()
         return { enabled: exists || loginSettings.openAtLogin }
+      }
+      if (IS_POSIX) {
+        return { enabled: fs.existsSync(getAutostartDesktopPath()) }
       }
       return { enabled: false }
     } catch {
@@ -1776,13 +2779,18 @@ app.whenReady().then(() => {
 
   ipcMain.handle('remove-startup-shortcut', async () => {
     try {
-      if (process.platform === 'win32') {
+      if (IS_WIN) {
         const startupDir = join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
         const shortcutPath = join(startupDir, 'HASHI.lnk')
         if (fs.existsSync(shortcutPath)) {
           fs.unlinkSync(shortcutPath)
         }
         app.setLoginItemSettings({ openAtLogin: false })
+        return { success: true }
+      }
+      if (IS_POSIX) {
+        const entryPath = getAutostartDesktopPath()
+        if (fs.existsSync(entryPath)) fs.unlinkSync(entryPath)
         return { success: true }
       }
       return { success: false }
@@ -1794,30 +2802,46 @@ app.whenReady().then(() => {
   const getSteamPaths = (): string[] => {
     const candidates = new Set<string>()
 
-    const addPath = (value?: string): void => {
-      if (!value) return
-      const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
-      if (normalized) candidates.add(normalized.replace(/\//g, '\\'))
-    }
+    if (IS_WIN) {
+      const addPath = (value?: string): void => {
+        if (!value) return
+        const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
+        if (normalized) candidates.add(normalized.replace(/\//g, '\\'))
+      }
 
-    for (const drive of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')) {
-      const root = `${drive}:\\`
-      if (!fs.existsSync(root)) continue
-      addPath(root)
-      addPath(join(root, 'Steam'))
-      addPath(join(root, 'steam'))
-      addPath(join(root, 'Games', 'Steam'))
-      addPath(join(root, 'Games', 'steam'))
-    }
+      for (const drive of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')) {
+        const root = `${drive}:\\`
+        if (!fs.existsSync(root)) continue
+        addPath(root)
+        addPath(join(root, 'Steam'))
+        addPath(join(root, 'steam'))
+        addPath(join(root, 'Games', 'Steam'))
+        addPath(join(root, 'Games', 'steam'))
+      }
 
-    const defaults = [
-      'C:\\Program Files (x86)\\Steam',
-      'C:\\Program Files\\Steam',
-      process.env.ProgramFiles ? `${process.env.ProgramFiles}\\Steam` : '',
-      process.env['ProgramFiles(x86)'] ? `${process.env['ProgramFiles(x86)']}\\Steam` : '',
-      process.env.LocalAppData ? `${process.env.LocalAppData}\\Steam` : ''
-    ]
-    defaults.forEach((value) => addPath(value))
+      const defaults = [
+        'C:\\Program Files (x86)\\Steam',
+        'C:\\Program Files\\Steam',
+        process.env.ProgramFiles ? `${process.env.ProgramFiles}\\Steam` : '',
+        process.env['ProgramFiles(x86)'] ? `${process.env['ProgramFiles(x86)']}\\Steam` : '',
+        process.env.LocalAppData ? `${process.env.LocalAppData}\\Steam` : ''
+      ]
+      defaults.forEach((value) => addPath(value))
+    } else {
+      // Linux / macOS: instalaciones típicas, incluidas Flatpak, Snap y los
+      // enlaces ~/.steam/steam que crea el cliente oficial.
+      const posixCandidates = [
+        join(USER_HOME, '.steam', 'steam'),
+        join(USER_HOME, '.steam', 'root'),
+        join(USER_HOME, '.steam', 'debian-installation'),
+        join(USER_HOME, '.local', 'share', 'Steam'),
+        join(USER_HOME, '.var', 'app', 'com.valvesoftware.Steam', '.local', 'share', 'Steam'),
+        join(USER_HOME, 'snap', 'steam', 'common', '.local', 'share', 'Steam'),
+        '/usr/lib/steam',
+        '/usr/share/steam'
+      ]
+      posixCandidates.forEach((value) => candidates.add(value))
+    }
 
     const steamRoots: string[] = []
     for (const candidate of candidates) {
@@ -1840,28 +2864,50 @@ app.whenReady().then(() => {
     }
 
     const finalRoots: string[] = []
-    for (const root of Array.from(new Set(steamRoots))) {
-      if (!root || !fs.existsSync(root)) continue
-      finalRoots.push(root)
+    const seen = new Set<string>()
 
-      const libraryFoldersPath = join(root, 'steamapps', 'libraryfolders.vdf')
-      if (!fs.existsSync(libraryFoldersPath)) continue
+    // Añade una raíz y, si tiene libraryfolders.vdf, sigue con sus bibliotecas
+    // adicionales (recursivo; `seen` evita bucles entre bibliotecas).
+    const pushRoot = (root: string): void => {
+      if (!root || !fs.existsSync(root)) return
+      let realRoot = root
+      try {
+        realRoot = fs.realpathSync(root)
+      } catch {
+        // ignore: sin realpath seguimos con la ruta original
+      }
+      if (seen.has(realRoot)) return
+      seen.add(realRoot)
+      finalRoots.push(realRoot)
+
+      const libraryFoldersPath = join(realRoot, 'steamapps', 'libraryfolders.vdf')
+      if (!fs.existsSync(libraryFoldersPath)) return
 
       try {
         const content = fs.readFileSync(libraryFoldersPath, 'utf8')
         const matches = [...content.matchAll(/\"([^\"]+)\"\s+\"([^\"]+)\"/g)]
-        for (const [, , value] of matches) {
-          if (!value || !value.includes(':')) continue
-          const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '')
-          const folder = normalized.replace(/\//g, '\\')
-          if (folder && fs.existsSync(folder)) finalRoots.push(folder)
+        for (const [, , valueRaw] of matches) {
+          if (!valueRaw) continue
+          // En VDF las barras invertidas vienen escapadas (C:\\Juegos)
+          const value = valueRaw.replace(/\\\\/g, '\\').replace(/\/+$/, '')
+          const looksWindows = /^[a-zA-Z]:[\\/]/.test(value)
+          const looksPosix = value.startsWith('/')
+          if (IS_WIN) {
+            if (!looksWindows) continue
+            pushRoot(value.replace(/\//g, '\\'))
+          } else {
+            if (!looksPosix) continue
+            pushRoot(value)
+          }
         }
       } catch {
         // ignore malformed libraryfolders.vdf
       }
     }
 
-    return Array.from(new Set(finalRoots.filter((root) => !!root && fs.existsSync(root))))
+    steamRoots.forEach((root) => pushRoot(root))
+
+    return finalRoots.filter((root) => !!root && fs.existsSync(root))
   }
 
   ipcMain.handle('get-steam-installation-status', async (_event, appIds: string[]) => {
@@ -2299,8 +3345,11 @@ app.whenReady().then(() => {
   })
 
   // ── Backend port management ──
-  ipcMain.handle('get-backend-port', () => {
-    return { port: currentBackendPort }
+  ipcMain.handle('get-backend-port', async () => {
+    // Espera a que termine la selección de puerto al arrancar: si hay que
+    // cambiar de puerto, el renderer debe ver el definitivo, no el guardado.
+    const port = backendPortReady ? await backendPortReady : currentBackendPort
+    return { port }
   })
 
   ipcMain.handle('set-backend-port', async (_event, port: number) => {
@@ -2308,8 +3357,10 @@ app.whenReady().then(() => {
       return { success: false, error: 'Invalid port number' }
     }
 
+    // Si en ese puerto ya corre un backend HASHI, es nuestro (o uno levantado
+    // a mano): se puede reutilizar sin problema.
     const inUse = await checkPortInUse(port)
-    if (inUse) {
+    if (inUse && !(await isHashiBackend(port))) {
       return { success: false, error: 'port_in_use' }
     }
 

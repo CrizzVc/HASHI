@@ -30,6 +30,9 @@ declare global {
       saveGames: (games: any[]) => Promise<{ success: boolean; error?: string }>
       onGameExited: (callback: (data: { gameId: string; durationMinutes: number }) => void) => () => void
       onGameSessionStart: (callback: (data: { gameId: string }) => void) => () => void
+      onGameLaunchError: (
+        callback: (data: { gameId: string; code: string; detail: string | null }) => void
+      ) => () => void
       // Fuerza a recalcular tamaños en el renderer tras un nudge de bounds del
       // main process (workaround del desfase de layout al entrar/salir de
       // fullscreen en monitores 4K con escalado != 100%)
