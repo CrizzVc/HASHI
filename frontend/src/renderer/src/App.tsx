@@ -6341,18 +6341,33 @@ function App(): React.JSX.Element {
               {settingsTab === 'bootvideo' && (
                 <div className="settings-tab-panel">
                   <div className="settings-section">
-                    <h3 className="settings-section-title">{t.bootVideoTitle}</h3>
-                    <p className="settings-section-subtitle">{t.bootVideoSubtitle}</p>
-
-                    {/* Current active video */}
-                    {bootVideoPaths.boot ? (
-                      <div className="boot-video-active-card">
-                        <div className="boot-video-active-info">
-                          <PlayIcon size={18} />
-                          <span>{t.bootVideoActive}</span>
-                        </div>
+                    {/* Header: title + subtitle + delete on the left, active video preview on the right */}
+                    <div className="boot-video-header">
+                      <div className="boot-video-header-text">
+                        <h3 className="settings-section-title">{t.bootVideoTitle}</h3>
+                        <p className="settings-section-subtitle">{t.bootVideoSubtitle}</p>
+                        {bootVideoPaths.boot && (
+                          <div className="boot-video-active-actions">
+                            <button
+                              type="button"
+                              className="settings-mini-btn boot-video-delete-btn"
+                              onClick={async () => {
+                                const result = await window.api.deleteBootVideo('boot')
+                                if (result.success) setBootVideoPaths(prev => ({ ...prev, boot: null }))
+                              }}
+                            >
+                              {t.bootVideoDelete}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {bootVideoPaths.boot ? (
                         <div className="boot-video-active-preview" style={{ position: 'relative' }}>
                           <video src={bootVideoPaths.boot} className="boot-video-preview-thumb" muted />
+                          <div className="boot-video-active-badge">
+                            <PlayIcon size={14} />
+                            <span>{t.bootVideoActive}</span>
+                          </div>
                           {bootVideoDownloadState?.target === 'boot' && (
                             <div className="boot-video-progress-overlay">
                               <div className="boot-video-progress-info">
@@ -6368,23 +6383,13 @@ function App(): React.JSX.Element {
                             </div>
                           )}
                         </div>
-                        <button
-                          type="button"
-                          className="btn-danger settings-mini-btn"
-                          onClick={async () => {
-                            const result = await window.api.deleteBootVideo('boot')
-                            if (result.success) setBootVideoPaths(prev => ({ ...prev, boot: null }))
-                          }}
-                        >
-                          {t.bootVideoDelete}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="boot-video-none-card">
-                        <PlayIcon size={24} />
-                        <span>{t.bootVideoNone}</span>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="boot-video-none-card">
+                          <PlayIcon size={24} />
+                          <span>{t.bootVideoNone}</span>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Search bar */}
                     <div className="boot-video-search-bar">

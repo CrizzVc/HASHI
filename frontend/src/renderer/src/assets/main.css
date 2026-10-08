@@ -7779,33 +7779,70 @@
    Boot Video Tab - Settings
    ═══════════════════════════════════════ */
 
-.boot-video-active-card {
+.boot-video-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.boot-video-header-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.boot-video-header-text .settings-section-subtitle {
+  margin-bottom: 0;
+}
+
+.boot-video-active-actions {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  margin-bottom: 20px;
-  height: 150px;
+  margin-top: 12px;
 }
 
-.boot-video-active-info {
+/* Dark gray delete button (no red) */
+.boot-video-delete-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.boot-video-delete-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+/* "Active" badge over the bottom-left corner of the preview thumbnail */
+.boot-video-active-badge {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: #4ade80;
+  gap: 5px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  border-radius: 6px;
+  color: #fbfbfb;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
   white-space: nowrap;
+  pointer-events: none;
 }
 
 .boot-video-active-preview {
-  flex: 1;
+  flex-shrink: 0;
+  width: 200px;
+  height: 100px;
   border-radius: 8px;
   overflow: hidden;
-  max-width: 200px;
-  height: 130px;
+  background: #000;
 }
 
 .boot-video-preview-thumb {
@@ -7820,12 +7857,12 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 20px;
+  padding: 12px 20px;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 12px;
-  margin-bottom: 20px;
   color: rgba(255, 255, 255, 0.4);
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .boot-video-search-bar {
@@ -8334,4 +8371,4 @@
   padding: 1px 6px;
   border-radius: 4px;
   letter-spacing: 0.5px;
-}
+}
