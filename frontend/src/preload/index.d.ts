@@ -17,7 +17,7 @@ declare global {
         freeMemory: string
         uptime: string
       }>
-      launchGame: (gameId: string, exePath: string) => Promise<{
+      launchGame: (gameId: string, exePath: string, launchMethod?: 'proton' | 'wine' | null) => Promise<{
         success: boolean
         tracked: boolean
         startTime: number

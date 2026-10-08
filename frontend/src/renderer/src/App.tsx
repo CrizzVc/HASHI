@@ -90,6 +90,10 @@ import {
 } from './services/soundService'
 import { useGamepadNavigation } from './hooks/useGamepadNavigation'
 
+/** ¿Estamos en Linux? (define si se ofrece Wine/Proton como método de ejecución) */
+const IS_LINUX =
+  navigator.platform.toLowerCase().includes('linux') || /linux/i.test(navigator.userAgent)
+
 /* ────────────────────────────────────────────
    Types
    ──────────────────────────────────────────── */
@@ -104,6 +108,8 @@ interface Game {
   color: string
   steamAppId?: string | null
   isSteam?: boolean
+  // Linux: capa de compatibilidad para .exe ('proton' | 'wine'); null = automático
+  launchMethod?: 'proton' | 'wine' | null
   // SteamGridDB fields
   steamGridId?: number | null
   gridImageUrl?: string | null
@@ -1014,6 +1020,7 @@ function App(): React.JSX.Element {
   const [formExePath, setFormExePath] = useState('')
   const [formIconUrl, setFormIconUrl] = useState<string | null>(null)
   const [formLaunchArgs, setFormLaunchArgs] = useState('')
+  const [formLaunchMethod, setFormLaunchMethod] = useState<'proton' | 'wine' | null>(null)
   const [editingGameId, setEditingGameId] = useState<string | null>(null)
   const [editGameTab, setEditGameTab] = useState<'inicio' | 'personalizacion' | 'detalles' | 'eliminar'>('inicio')
 
@@ -2392,14 +2399,15 @@ function App(): React.JSX.Element {
           ...g,
           name: formName.trim(),
           exePath: formExePath.trim(),
-          iconDataUrl: formIconUrl ?? g.iconDataUrl
+          iconDataUrl: formIconUrl ?? g.iconDataUrl,
+          launchMethod: IS_LINUX && !editingGameId?.startsWith('steam-') ? formLaunchMethod : g.launchMethod
         }
         : g
     )
     saveGames(newGames)
     setModal(null)
     resetForm()
-  }, [formName, formExePath, formIconUrl, editingGameId, games, saveGames])
+  }, [formName, formExePath, formIconUrl, formLaunchMethod, editingGameId, games, saveGames])
 
   // ── Delete game ──
   const handleDeleteGame = useCallback(
@@ -2548,7 +2556,7 @@ function App(): React.JSX.Element {
       setRunningGameId(launchTarget.id)
     }
     try {
-      await window.api.launchGame(launchTarget.id, launchTarget.exePath)
+      await window.api.launchGame(launchTarget.id, launchTarget.exePath, launchTarget.launchMethod)
     } catch (err) {
       console.error('Error launching game:', err)
       setRunningGameId(null)
@@ -2598,6 +2606,7 @@ function App(): React.JSX.Element {
             setFormExePath(steamGame.installed ? `steam://rungameid/${steamGame.appid}` : `steam://install/${steamGame.appid}`)
             setFormIconUrl(steamGame.iconDataUrl || null)
             setFormLaunchArgs('')
+            setFormLaunchMethod(null)
             setModal('editGame')
             return
           }
@@ -2609,6 +2618,7 @@ function App(): React.JSX.Element {
       setFormExePath(game.exePath)
       setFormIconUrl(game.iconDataUrl)
       setFormLaunchArgs('')
+      setFormLaunchMethod(game.launchMethod ?? null)
       setModal('editGame')
     },
     [games, steamLibrary]
@@ -2619,6 +2629,7 @@ function App(): React.JSX.Element {
     setFormExePath('')
     setFormIconUrl(null)
     setFormLaunchArgs('')
+    setFormLaunchMethod(null)
     setEditingGameId(null)
     setEditGameTab('inicio')
   }
@@ -5420,37 +5431,61 @@ function App(): React.JSX.Element {
                       </div>
                     </div>
 
-                    <div className="edit-game-field-block">
-                      <label className="edit-game-field-title">{t.shortcutsSubTitle}</label>
-                      <span className="edit-game-field-subtitle">{t.shortcutsSubTitleDesc}</span>
-                      <div className="edit-game-shortcuts-row">
-                        <button
-                          type="button"
-                          className="edit-game-shortcut-btn"
-                          onClick={() => { }}
-                        >
-                          <DesktopIcon size={16} /> {t.cmDesktopShortcut}
-                        </button>
-                        <button
-                          type="button"
-                          className="edit-game-shortcut-btn"
-                          onClick={() => {
-                            if (isSteamEdit && currentTargetGame) {
-                              window.api?.openExternal?.(`steam://rungameid/${(currentTargetGame as any).appid || (currentTargetGame as any).steamAppId}`)
-                            }
-                          }}
-                        >
-                          <StoreIcon size={16} /> {t.createSteamShortcut}
-                        </button>
-                        <button
-                          type="button"
-                          className="edit-game-shortcut-btn"
-                          onClick={() => { }}
-                        >
-                          {t.createHomeMenu}
-                        </button>
+                    {IS_LINUX && !isSteamEdit ? (
+                      /* Linux: método de ejecución (.exe vía Proton o Wine) */
+                      <div className="edit-game-field-block">
+                        <label className="edit-game-field-title">{t.launchMethodTitle}</label>
+                        <span className="edit-game-field-subtitle">{t.launchMethodDesc}</span>
+                        <div className="edit-game-shortcuts-row">
+                          <button
+                            type="button"
+                            className={`edit-game-shortcut-btn${formLaunchMethod === 'proton' ? ' selected' : ''}`}
+                            onClick={() => setFormLaunchMethod(formLaunchMethod === 'proton' ? null : 'proton')}
+                          >
+                            Proton
+                          </button>
+                          <button
+                            type="button"
+                            className={`edit-game-shortcut-btn${formLaunchMethod === 'wine' ? ' selected' : ''}`}
+                            onClick={() => setFormLaunchMethod(formLaunchMethod === 'wine' ? null : 'wine')}
+                          >
+                            Wine
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="edit-game-field-block">
+                        <label className="edit-game-field-title">{t.shortcutsSubTitle}</label>
+                        <span className="edit-game-field-subtitle">{t.shortcutsSubTitleDesc}</span>
+                        <div className="edit-game-shortcuts-row">
+                          <button
+                            type="button"
+                            className="edit-game-shortcut-btn"
+                            onClick={() => { }}
+                          >
+                            <DesktopIcon size={16} /> {t.cmDesktopShortcut}
+                          </button>
+                          <button
+                            type="button"
+                            className="edit-game-shortcut-btn"
+                            onClick={() => {
+                              if (isSteamEdit && currentTargetGame) {
+                                window.api?.openExternal?.(`steam://rungameid/${(currentTargetGame as any).appid || (currentTargetGame as any).steamAppId}`)
+                              }
+                            }}
+                          >
+                            <StoreIcon size={16} /> {t.createSteamShortcut}
+                          </button>
+                          <button
+                            type="button"
+                            className="edit-game-shortcut-btn"
+                            onClick={() => { }}
+                          >
+                            {t.createHomeMenu}
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="edit-game-field-block">
                       <label className="edit-game-field-title">{t.optionsToStart}</label>

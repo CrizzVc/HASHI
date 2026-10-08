@@ -80,6 +80,8 @@ export interface TranslationSchema {
   deletePath: string
   shortcutsSubTitle: string
   shortcutsSubTitleDesc: string
+  launchMethodTitle: string
+  launchMethodDesc: string
   browseFile: string
   labelIconUrl: string
   searchSteamGridDB: string
@@ -394,6 +396,8 @@ export const translations: Record<Language, TranslationSchema> = {
     deletePath: 'Borrar ruta',
     shortcutsSubTitle: 'Accesos directos',
     shortcutsSubTitleDesc: 'Crea accesos directos para ejecutar el juego rápidamente',
+    launchMethodTitle: 'Método de ejecución',
+    launchMethodDesc: 'Elige la capa de compatibilidad con la que ejecutar tus juegos de Windows',
     grid11: 'Grid 1:1 (Row / Biblioteca)',
     cover: 'Portada',
     icon: 'Icono',
@@ -685,6 +689,8 @@ export const translations: Record<Language, TranslationSchema> = {
     deletePath: 'Delete path',
     shortcutsSubTitle: 'Shortcuts',
     shortcutsSubTitleDesc: 'Create shortcuts to run the game quickly',
+    launchMethodTitle: 'Execution method',
+    launchMethodDesc: 'Choose the compatibility layer used to run your Windows games',
     grid11: 'Grid 1:1 (Row / Library)',
     cover: 'Cover',
     icon: 'Icon',

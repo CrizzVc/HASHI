@@ -4,7 +4,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer
 const api = {
   getSystemInfo: () => ipcRenderer.invoke('get-system-info'),
-  launchGame: (gameId: string, exePath: string) => ipcRenderer.invoke('launch-game', gameId, exePath),
+  launchGame: (gameId: string, exePath: string, launchMethod?: 'proton' | 'wine' | null) => ipcRenderer.invoke('launch-game', gameId, exePath, launchMethod ?? null),
   selectGameFile: () => ipcRenderer.invoke('select-game-file'),
   getFileIcon: (filePath: string) => ipcRenderer.invoke('get-file-icon', filePath),
   getGames: () => ipcRenderer.invoke('get-games'),

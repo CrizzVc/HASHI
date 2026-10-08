@@ -2078,6 +2078,15 @@
   color: #fff;
 }
 
+/* Método de ejecución (Linux): opción Proton/Wine seleccionada */
+.edit-game-shortcut-btn.selected {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+}
+
 .edit-game-sgdb-btn {
   display: inline-flex;
   align-items: center;

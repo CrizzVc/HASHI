@@ -1937,10 +1937,12 @@ app.whenReady().then(() => {
    * Lanza el ejecutable de un juego local de forma desprendida (detached) para
    * que el juego sobreviva si el launcher se cierra.
    * - Windows: shell con comillas (respeta espacios y accesos directos).
-   * - Linux: binario nativo / AppImage directo, .sh con bash, .exe con Wine.
-   * Devuelve null si no hay forma de lanzarlo en esta plataforma.
+   * - Linux: binario nativo / AppImage directo, .sh con bash, .exe con Wine/Proton.
+   * `launchMethod` ('proton' | 'wine') prioriza esa capa de compatibilidad para
+   * .exe; si no está instalada, se cae a la otra. Devuelve null si no hay forma
+   * de lanzarlo en esta plataforma.
    */
-  function spawnGameProcess(exePath: string): ChildProcess | null {
+  function spawnGameProcess(exePath: string, launchMethod?: string | null): ChildProcess | null {
     let cwd = dirname(exePath)
     try {
       if (fs.statSync(exePath).isDirectory()) cwd = exePath
@@ -1956,12 +1958,16 @@ app.whenReady().then(() => {
 
     const ext = extname(exePath).toLowerCase()
 
-    // Juego de Windows: prioriza Proton si está instalado en Steam, o Wine en su defecto
+    // Juego de Windows: el usuario elige Proton o Wine; si no hay preferencia
+    // (o falta la capa elegida) se prioriza Proton y se cae a Wine.
     if (ext === '.exe') {
       const proton = findProton()
       const wine = findWine()
+      const useWineOnly = launchMethod === 'wine' && Boolean(wine)
+      const tryProton = !useWineOnly && Boolean(proton)
+      const tryWine = useWineOnly || !proton
 
-      if (proton) {
+      if (tryProton && proton) {
         const steamInstallPath =
           firstExisting([
             join(USER_HOME, '.local/share/Steam'),
@@ -2002,7 +2008,7 @@ app.whenReady().then(() => {
         return child
       }
 
-      if (wine) {
+      if (tryWine && wine) {
         // Eleva ulimit -n a 524288 para evitar crash por desbordamiento de descriptores en juegos pesados (Unity/Unreal/Esync/Fsync)
         const gameEnv = {
           ...process.env,
@@ -2045,7 +2051,7 @@ app.whenReady().then(() => {
     return child
   }
 
-  ipcMain.handle('launch-game', async (event, gameId: string, exePath: string) => {
+  ipcMain.handle('launch-game', async (event, gameId: string, exePath: string, launchMethod?: string | null) => {
     const win = BrowserWindow.fromWebContents(event.sender)
 
     try {
@@ -2098,7 +2104,7 @@ app.whenReady().then(() => {
 
         let child: ChildProcess | null = null
         try {
-          child = spawnGameProcess(exePath)
+          child = spawnGameProcess(exePath, launchMethod)
         } catch (err) {
           console.error('Error launching game:', err instanceof Error ? err.message : String(err))
         }
