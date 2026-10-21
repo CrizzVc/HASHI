@@ -16,6 +16,10 @@
     "prebuild": "npm --prefix ../backend install --include=dev --no-fund --no-audit && npm run prepare:backend",
     "start": "electron-vite preview",
     "dev": "electron-vite dev -w",
+    "dev:vite": "vite",
+    "build:vite": "vite build",
+    "dev:tauri": "tauri dev",
+    "build:tauri": "tauri build",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir && npm run copy:backend-dist",
@@ -26,6 +30,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@tauri-apps/api": "^2.12.4",
     "hls.js": "^1.7.2",
     "lucide-react": "^1.42.0"
   },
@@ -37,6 +42,7 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@tauri-apps/cli": "^2.12.3",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
