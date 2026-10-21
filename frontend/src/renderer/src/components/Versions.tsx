@@ -1,13 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 function Versions(): React.JSX.Element {
-  const [versions] = useState(window.electron.process.versions)
+  const [version, setVersion] = useState('')
+  const [platform, setPlatform] = useState('')
+
+  useEffect(() => {
+    window.api
+      .getAppVersion()
+      .then(setVersion)
+      .catch(() => {})
+    window.api
+      .getSystemInfo()
+      .then((info) => setPlatform(`${info.platform} (${info.arch})`))
+      .catch(() => {})
+  }, [])
 
   return (
     <ul className="versions">
-      <li className="electron-version">Electron v{versions.electron}</li>
-      <li className="chrome-version">Chromium v{versions.chrome}</li>
-      <li className="node-version">Node v{versions.node}</li>
+      <li className="electron-version">HASHI v{version}</li>
+      <li className="chrome-version">{platform}</li>
     </ul>
   )
 }

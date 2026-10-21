@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 
+import { onIpcEvent } from '../bridge/api'
+
 export interface SteamDownloadItem {
   appId: string
   name: string
@@ -97,7 +99,7 @@ export function useSteamDownloads(pollIntervalMs: number = 1000): {
     }, pollIntervalMs)
 
     // Listen for real-time updates from main process (fs.watch on appmanifest)
-    const removeListener = window.electron?.ipcRenderer?.on?.('steam-download-updated', () => {
+    const removeListener = onIpcEvent('steam-download-updated', () => {
       fetchDownloads()
     })
 
