@@ -9,6 +9,8 @@ pub struct AppState {
   pub quitting: AtomicBool,
   /// Modo Omniconsole: minimiza normalmente en vez de sacar de la barra de tareas.
   pub omniconsole: AtomicBool,
+  /// Indica si actualmente hay un juego ejecutándose.
+  pub is_game_running: AtomicBool,
   pub tray: Mutex<Option<TrayIcon<tauri::Wry>>>,
 }
 
@@ -17,6 +19,7 @@ impl Default for AppState {
     Self {
       quitting: AtomicBool::new(false),
       omniconsole: AtomicBool::new(false),
+      is_game_running: AtomicBool::new(false),
       tray: Mutex::new(None),
     }
   }

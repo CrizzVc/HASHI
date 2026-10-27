@@ -14,6 +14,29 @@ pub fn show_main(app: &AppHandle) {
   }
 }
 
+/// Oculta el launcher mientras se juega:
+/// - Con Omniconsole: minimiza normalmente (visible en barra de tareas).
+/// - Sin Omniconsole: minimiza + saca de la barra de tareas.
+pub fn hide_for_game(app: &AppHandle) {
+  let omniconsole = app.state::<AppState>().omniconsole.load(Ordering::SeqCst);
+  if let Some(win) = app.get_webview_window("main") {
+    if !omniconsole {
+      let _ = win.set_skip_taskbar(true);
+    }
+    let _ = win.minimize();
+  }
+}
+
+/// Restaura el launcher tras finalizar una sesión de juego.
+pub fn show_after_game(app: &AppHandle) {
+  if let Some(win) = app.get_webview_window("main") {
+    let _ = win.set_skip_taskbar(false);
+    let _ = win.unminimize();
+    let _ = win.show();
+    let _ = win.set_focus();
+  }
+}
+
 /// Salida explícita desde "Salir" (tray o `quit-app`): marca el cierre y sale.
 /// El icono de tray desaparece solo al terminar el proceso (Tauri 2 no expone
 /// `destroy` en `TrayIcon`).

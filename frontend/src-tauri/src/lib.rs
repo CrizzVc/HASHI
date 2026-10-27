@@ -22,6 +22,10 @@ pub fn run() {
       None,
     ))
     .manage(AppState::default())
+    .register_uri_scheme_protocol(
+      commands::bootvideo::MEDIA_SCHEME,
+      |app, request| commands::bootvideo::handle_media_protocol(app, request),
+    )
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
