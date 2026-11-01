@@ -675,13 +675,24 @@ function App(): React.JSX.Element {
   const bootSkipRafRef = useRef(0)
   const bootSkipStartRef = useRef(0)
   const bootSkipVisibleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bootDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const bootDefaultHtmlTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const dismissBootPlayer = useCallback(() => {
+    // Cancel default boot.html timer if active
+    if (bootDefaultHtmlTimerRef.current) {
+      clearTimeout(bootDefaultHtmlTimerRef.current)
+      bootDefaultHtmlTimerRef.current = null
+    }
+
     // If already fading out, do nothing (avoid double-trigger)
     setBootFadingOut((prev) => {
       if (prev) return prev
+      if (bootDismissTimerRef.current) {
+        clearTimeout(bootDismissTimerRef.current)
+      }
       // Start the fade-out animation; actual cleanup happens after CSS transition ends
-      setTimeout(() => {
+      bootDismissTimerRef.current = setTimeout(() => {
         const videoEl = bootPlayerVideoRef.current
         if (videoEl) {
           try { videoEl.pause() } catch {}
@@ -693,6 +704,7 @@ function App(): React.JSX.Element {
         setReplayHomeEntrance(true)
         // Play the startup sound when home is revealed
         playHome()
+        bootDismissTimerRef.current = null
       }, 700) // matches the CSS fade-out duration
       return true
     })
@@ -6649,7 +6661,10 @@ function App(): React.JSX.Element {
               sandbox="allow-scripts allow-same-origin"
               onLoad={() => {
                 // Auto-dismiss the default boot animation after 8 seconds
-                setTimeout(() => {
+                if (bootDefaultHtmlTimerRef.current) {
+                  clearTimeout(bootDefaultHtmlTimerRef.current)
+                }
+                bootDefaultHtmlTimerRef.current = setTimeout(() => {
                   dismissBootPlayer()
                 }, 8000)
               }}
