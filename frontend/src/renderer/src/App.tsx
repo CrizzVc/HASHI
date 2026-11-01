@@ -4256,7 +4256,7 @@ function App(): React.JSX.Element {
                   onDoubleClick={() => handleChooseWallpaperAsHome(idx)}
 
                 >
-                  <img src={img.dataUrl} alt={img.name} className="wallpaper-card-img" draggable={false} loading="lazy" decoding="async" />
+                  <img src={img.dataUrl} alt={img.name} className="wallpaper-card-img" draggable={false} />
                 </div>
               )
             })}
@@ -4305,8 +4305,6 @@ function App(): React.JSX.Element {
                   alt={game.name}
                   className="game-card-cover"
                   draggable={false}
-                  loading="lazy"
-                  decoding="async"
                   onError={(e) => {
                     const target = e.currentTarget
                     if (game.steamAppId && !target.dataset.fallback) {
@@ -4321,8 +4319,6 @@ function App(): React.JSX.Element {
                   alt={game.name}
                   className="game-card-icon"
                   draggable={false}
-                  loading="lazy"
-                  decoding="async"
                 />
               ) : (
                 <div
@@ -5884,8 +5880,6 @@ function App(): React.JSX.Element {
                               alt={game.name}
                               className={`library-item-cover ${game.installed ? 'installed' : 'not-installed'}`}
                               draggable={false}
-                              loading="lazy"
-                              decoding="async"
                               onError={(e) => {
                                 const target = e.currentTarget
                                 if (!target.dataset.fallback) {
@@ -5943,9 +5937,9 @@ function App(): React.JSX.Element {
                       >
                         <div className="library-item-art">
                           {game.squareGridImageUrl || game.gridImageUrl ? (
-                            <img src={game.squareGridImageUrl || game.gridImageUrl!} alt={game.name} className="library-item-cover" draggable={false} loading="lazy" decoding="async" />
+                            <img src={game.squareGridImageUrl || game.gridImageUrl!} alt={game.name} className="library-item-cover" draggable={false} />
                           ) : game.iconDataUrl ? (
-                            <img src={game.iconDataUrl} alt={game.name} className="library-item-icon" draggable={false} loading="lazy" decoding="async" />
+                            <img src={game.iconDataUrl} alt={game.name} className="library-item-icon" draggable={false} />
                           ) : (
                             <div className="game-card-placeholder" style={{ background: `linear-gradient(135deg, ${game.color}30, ${game.color}15)` }}>
                               {game.name.charAt(0).toUpperCase()}
