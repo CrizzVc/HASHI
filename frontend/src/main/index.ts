@@ -2975,8 +2975,10 @@ app.whenReady().then(() => {
 
   // Cache for real-time download info parsed from content_log.txt
   const downloadInfoCache = new Map<string, { downloaded: number; total: number; speed: number; updated: number }>()
+  const lastLogMtime = new Map<string, number>()
 
   function parseContentLogForDownloads(): void {
+    if (isGameRunning) return
     const steamRoots = getSteamPaths()
     for (const root of steamRoots) {
       const logPath = join(root, 'logs', 'content_log.txt')
@@ -2984,6 +2986,11 @@ app.whenReady().then(() => {
 
       try {
         const stat = fs.statSync(logPath)
+        const prevMtime = lastLogMtime.get(logPath)
+        if (prevMtime !== undefined && stat.mtimeMs === prevMtime) {
+          continue
+        }
+        lastLogMtime.set(logPath, stat.mtimeMs)
         // Read last 512KB for better coverage
         const readSize = Math.min(stat.size, 512 * 1024)
         const fd = fs.openSync(logPath, 'r')

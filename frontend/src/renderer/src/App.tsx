@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import {
   PlayIcon,
   PlusIcon,
@@ -33,15 +33,21 @@ import BootVideoNotification, { BootVideoNotificationData } from './components/B
 import defaultBootHtmlUrl from './assets/boot.html?url'
 import UpdateNotification, { UpdateNotificationData } from './components/UpdateNotification'
 import LaunchErrorNotification, { LaunchErrorNotificationData } from './components/LaunchErrorNotification'
-import { DownloadsModal } from './components/DownloadsModal'
-import { ModalHelper } from './components/ModalHelper'
-
-import MultimediaView from './components/MultimediaView';
-import ExtensionView from './components/ExtensionView';
-import MediaDetailView, { MediaItem } from './components/MediaDetailView';
+import { TopBarClock } from './components/TopBarClock'
+import { type MediaItem } from './components/MediaDetailView'
 import { useFriendNotifications } from './hooks/useFriendNotifications'
 import { useSteamDownloads } from './hooks/useSteamDownloads'
-import TrophiesView from './components/TrophiesView'
+
+const DownloadsModal = lazy(() =>
+  import('./components/DownloadsModal').then((m) => ({ default: m.DownloadsModal }))
+)
+const ModalHelper = lazy(() =>
+  import('./components/ModalHelper').then((m) => ({ default: m.ModalHelper }))
+)
+const MultimediaView = lazy(() => import('./components/MultimediaView'))
+const ExtensionView = lazy(() => import('./components/ExtensionView'))
+const MediaDetailView = lazy(() => import('./components/MediaDetailView'))
+const TrophiesView = lazy(() => import('./components/TrophiesView'))
 
 
 import steamLogo from './assets/tiendas/steamLogo.png'
@@ -505,7 +511,6 @@ function App(): React.JSX.Element {
   const [isGameRunning, setIsGameRunning] = useState(false)
   const [downloadingGameId, setDownloadingGameId] = useState<string | null>(null)
   const isGameRunningRef = useRef(false)
-  const [clock, setClock] = useState('')
   const [modal, setModal] = useState<ModalType>(null)
   const [nativeView, setNativeView] = useState<'multimedia' | null>(null)
   const [activeEmbeddedView, setActiveEmbeddedView] = useState<string | null>(null)
@@ -1669,19 +1674,7 @@ function App(): React.JSX.Element {
     }
   }, [modal, settingsTab, wallpaperImages, backgroundImage])
 
-  // ── Clock ──
-  useEffect(() => {
-    const tick = (): void => {
-      if (isGameRunningRef.current) return
-      const now = new Date()
-      setClock(
-        now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-      )
-    }
-    tick()
-    const interval = setInterval(tick, 1000)
-    return () => clearInterval(interval)
-  }, [])
+
 
 
 
@@ -4114,12 +4107,13 @@ function App(): React.JSX.Element {
           })()}
           <WifiIcon size={18} className="header-icon" />
           <BatteryIcon size={18} className="header-icon" />
-          <span className="header-clock">{clock}</span>
+          <TopBarClock />
         </div>
       </header>
 
       {nativeView === 'multimedia' && (
-        <MultimediaView
+        <Suspense fallback={null}>
+          <MultimediaView
           heroItem={heroItem}
           // heroSlides={heroSlides}
           activeSlide={activeSlide}
@@ -4141,19 +4135,22 @@ function App(): React.JSX.Element {
           onSourceChange={(sourceId) => { setMultimediaExtensionId(sourceId); setContinueWatchingIndex(0) }}
           onEpisodeClick={(item) => setMediaDetail(item)}
         />
+        </Suspense>
       )}
 
       {activeExtension && (
-        <ExtensionView
-          extension={activeExtension}
-          onClose={() => {
-            playClose()
-            setActiveExtension(null)
-          }}
-        />
+        <Suspense fallback={null}>
+          <ExtensionView
+            extension={activeExtension}
+            onClose={() => {
+              playClose()
+              setActiveExtension(null)
+            }}
+          />
+        </Suspense>
       )}
 
-      {mediaDetail && <MediaDetailView item={mediaDetail} onClose={() => setMediaDetail(null)} />}
+      {mediaDetail && (<Suspense fallback={null}><MediaDetailView item={mediaDetail} onClose={() => setMediaDetail(null)} /></Suspense>)}
 
       {/* ── Hero section ── */}
       <section className="hero-section">
@@ -4212,7 +4209,7 @@ function App(): React.JSX.Element {
                   onDoubleClick={() => handleChooseWallpaperAsHome(idx)}
 
                 >
-                  <img src={img.dataUrl} alt={img.name} className="wallpaper-card-img" draggable={false} />
+                  <img src={img.dataUrl} alt={img.name} className="wallpaper-card-img" draggable={false} loading="lazy" decoding="async" />
                 </div>
               )
             })}
@@ -4258,6 +4255,8 @@ function App(): React.JSX.Element {
                   alt={game.name}
                   className="game-card-cover"
                   draggable={false}
+                  loading="lazy"
+                  decoding="async"
                   onError={(e) => {
                     const target = e.currentTarget
                     if (game.steamAppId && !target.dataset.fallback) {
@@ -4272,6 +4271,8 @@ function App(): React.JSX.Element {
                   alt={game.name}
                   className="game-card-icon"
                   draggable={false}
+                  loading="lazy"
+                  decoding="async"
                 />
               ) : (
                 <div
@@ -5168,7 +5169,8 @@ function App(): React.JSX.Element {
 
           {/* ── Achievements List Overlay ── */}
           {achievementsView && detailGame && (
-            <TrophiesView
+            <Suspense fallback={null}>
+              <TrophiesView
               gameName={detailGame.name}
               coverUrl={detailGame.gridImageUrl || detailGame.squareGridImageUrl || detailGame.iconDataUrl}
               logoUrl={detailGame.logoImageUrl}
@@ -5180,6 +5182,7 @@ function App(): React.JSX.Element {
               language={language}
               onClose={() => setAchievementsView(false)}
             />
+            </Suspense>
           )}
         </div>
       )}
@@ -5831,6 +5834,8 @@ function App(): React.JSX.Element {
                               alt={game.name}
                               className={`library-item-cover ${game.installed ? 'installed' : 'not-installed'}`}
                               draggable={false}
+                              loading="lazy"
+                              decoding="async"
                               onError={(e) => {
                                 const target = e.currentTarget
                                 if (!target.dataset.fallback) {
@@ -5888,9 +5893,9 @@ function App(): React.JSX.Element {
                       >
                         <div className="library-item-art">
                           {game.squareGridImageUrl || game.gridImageUrl ? (
-                            <img src={game.squareGridImageUrl || game.gridImageUrl!} alt={game.name} className="library-item-cover" draggable={false} />
+                            <img src={game.squareGridImageUrl || game.gridImageUrl!} alt={game.name} className="library-item-cover" draggable={false} loading="lazy" decoding="async" />
                           ) : game.iconDataUrl ? (
-                            <img src={game.iconDataUrl} alt={game.name} className="library-item-icon" draggable={false} />
+                            <img src={game.iconDataUrl} alt={game.name} className="library-item-icon" draggable={false} loading="lazy" decoding="async" />
                           ) : (
                             <div className="game-card-placeholder" style={{ background: `linear-gradient(135deg, ${game.color}30, ${game.color}15)` }}>
                               {game.name.charAt(0).toUpperCase()}
@@ -6883,6 +6888,7 @@ function App(): React.JSX.Element {
 
 
       {/* ── Downloads Modal (PS5 Composition) ── */}
+      <Suspense fallback={null}>
       <DownloadsModal
         isOpen={showDownloadsModal}
         onClose={() => setShowDownloadsModal(false)}
@@ -6902,6 +6908,7 @@ function App(): React.JSX.Element {
           setShowDownloadsModal(false)
         }}
       />
+      </Suspense>
 
       {/* ── Notification Container ── */}
       <NotificationContainer
@@ -6973,11 +6980,13 @@ function App(): React.JSX.Element {
       )}
 
       {/* ── Modal Helper (Tutorial de Bienvenida) ── */}
+      <Suspense fallback={null}>
       <ModalHelper
         isOpen={showHelperModal}
         onClose={() => setShowHelperModal(false)}
         language={language}
       />
+      </Suspense>
 
       {/* ── Port Change Modal ── */}
       {showPortChangeModal && (
