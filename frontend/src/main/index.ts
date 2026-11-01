@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol, net } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage, Tray, Menu, protocol, net, screen } from 'electron'
 import { join, dirname, extname, basename, normalize } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import steamLogoAsset from '../renderer/src/assets/tiendas/steamLogo.png?asset'
@@ -171,6 +171,10 @@ function killHungSteamUrlForwarders(prefixPath: string | undefined | null): numb
 
 // Permitir autoplay de video con sonido sin interacción del usuario (boot video)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+
+// Desbloquear la tasa de refresco del monitor (120Hz, 144Hz, 165Hz, 240Hz, etc.)
+// eliminando el tope interno de 60 FPS de Chromium sin desactivar VSync (para no saturar la GPU)
+app.commandLine.appendSwitch('disable-frame-rate-limit')
 import { URL, pathToFileURL } from 'url'
 
 // ── Protocolo personalizado para servir archivos locales fuera del paquete de la app ──
@@ -1466,6 +1470,12 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
+    try {
+      const primaryDisplay = screen.getPrimaryDisplay()
+      console.log(`[Display] Pantalla principal: ${primaryDisplay.size.width}x${primaryDisplay.size.height} @ ${primaryDisplay.displayFrequency || 60}Hz`)
+    } catch {
+      // ignore
+    }
     if (!isGameRunning) {
       mainWindow.show()
     }
@@ -1590,13 +1600,23 @@ app.whenReady().then(() => {
 
   ipcMain.handle('get-system-info', () => {
     const os = require('os')
+    let refreshRate: string | undefined
+    try {
+      const primary = screen.getPrimaryDisplay()
+      if (primary?.displayFrequency) {
+        refreshRate = `${primary.displayFrequency} Hz`
+      }
+    } catch {
+      // ignore
+    }
     return {
       platform: process.platform === 'win32' ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux',
       arch: process.arch,
       cpus: os.cpus()[0]?.model || 'Procesador Desconocido',
       totalMemory: Math.round(os.totalmem() / (1024 * 1024 * 1024)) + ' GB',
       freeMemory: Math.round(os.freemem() / (1024 * 1024 * 1024)) + ' GB',
-      uptime: Math.round(os.uptime() / 3600) + ' horas'
+      uptime: Math.round(os.uptime() / 3600) + ' horas',
+      refreshRate
     }
   })
 

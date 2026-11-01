@@ -16,6 +16,7 @@ declare global {
         totalMemory: string
         freeMemory: string
         uptime: string
+        refreshRate?: string
       }>
       launchGame: (gameId: string, exePath: string, launchMethod?: 'proton' | 'wine' | null) => Promise<{
         success: boolean

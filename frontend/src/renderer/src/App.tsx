@@ -184,6 +184,7 @@ interface SystemInfo {
   totalMemory: string
   freeMemory: string
   uptime: string
+  refreshRate?: string
 }
 
 interface ContextMenuState {
@@ -5222,6 +5223,12 @@ function App(): React.JSX.Element {
                 <div className="spec-label">Tiempo Activo</div>
                 <div className="spec-value">{systemInfo.uptime}</div>
               </div>
+              {systemInfo.refreshRate && (
+                <div className="spec-item">
+                  <div className="spec-label">Tasa de Refresco</div>
+                  <div className="spec-value">{systemInfo.refreshRate}</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
