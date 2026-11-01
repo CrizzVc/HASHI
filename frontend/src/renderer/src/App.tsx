@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+﻿import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import {
   PlayIcon,
   PlusIcon,
@@ -695,7 +695,7 @@ function App(): React.JSX.Element {
       bootDismissTimerRef.current = setTimeout(() => {
         const videoEl = bootPlayerVideoRef.current
         if (videoEl) {
-          try { videoEl.pause() } catch {}
+          try { videoEl.pause() } catch { }
         }
         setShowBootPlayer(false)
         setBootPlayerVideoPath(null)
@@ -897,7 +897,7 @@ function App(): React.JSX.Element {
       clearTimeout(safetyTimer)
       try {
         videoEl.pause()
-      } catch {}
+      } catch { }
     }
   }, [showBootPlayer, bootPlayerVideoPath, bootVideoReloadKey, bootVideoFailed, dismissBootPlayer])
 
@@ -4194,27 +4194,27 @@ function App(): React.JSX.Element {
       {nativeView === 'multimedia' && (
         <Suspense fallback={null}>
           <MultimediaView
-          heroItem={heroItem}
-          // heroSlides={heroSlides}
-          activeSlide={activeSlide}
-          setActiveSlide={setActiveSlide}
-          continueWatching={multimediaCards}
-          setNativeView={setNativeView}
-          isHeroPaused={isHeroPaused}
-          setIsHeroPaused={setIsHeroPaused}
-          profileAvatar={profileAvatar || appDefaultIcon}
-          profileName={profileName.trim() ? profileName.trim() : 'HASHI'}
-          onProfileClick={() => { if (!sidebarOpen) { playEnter(); setSidebarOpen(true) } else { playClose(); setSidebarOpen(false) } }}
-          focusedSection={multimediaFocus}
-          continueWatchingIndex={continueWatchingIndex}
-          railTitle={multimediaExtensionId === 'animeav1' ? 'AnimeAV1' : undefined}
-          railSubtitle={multimediaExtensionId === 'animeav1' ? 'Últimos episodios' : undefined}
-          hideFocusedCardTitle={multimediaExtensionId === 'animeav1'}
-          activeSourceId={multimediaExtensionId || 'multimedia'}
-          sources={multimediaSources}
-          onSourceChange={(sourceId) => { setMultimediaExtensionId(sourceId); setContinueWatchingIndex(0) }}
-          onEpisodeClick={(item) => setMediaDetail(item)}
-        />
+            heroItem={heroItem}
+            // heroSlides={heroSlides}
+            activeSlide={activeSlide}
+            setActiveSlide={setActiveSlide}
+            continueWatching={multimediaCards}
+            setNativeView={setNativeView}
+            isHeroPaused={isHeroPaused}
+            setIsHeroPaused={setIsHeroPaused}
+            profileAvatar={profileAvatar || appDefaultIcon}
+            profileName={profileName.trim() ? profileName.trim() : 'HASHI'}
+            onProfileClick={() => { if (!sidebarOpen) { playEnter(); setSidebarOpen(true) } else { playClose(); setSidebarOpen(false) } }}
+            focusedSection={multimediaFocus}
+            continueWatchingIndex={continueWatchingIndex}
+            railTitle={multimediaExtensionId === 'animeav1' ? 'AnimeAV1' : undefined}
+            railSubtitle={multimediaExtensionId === 'animeav1' ? 'Últimos episodios' : undefined}
+            hideFocusedCardTitle={multimediaExtensionId === 'animeav1'}
+            activeSourceId={multimediaExtensionId || 'multimedia'}
+            sources={multimediaSources}
+            onSourceChange={(sourceId) => { setMultimediaExtensionId(sourceId); setContinueWatchingIndex(0) }}
+            onEpisodeClick={(item) => setMediaDetail(item)}
+          />
         </Suspense>
       )}
 
@@ -5250,17 +5250,17 @@ function App(): React.JSX.Element {
           {achievementsView && detailGame && (
             <Suspense fallback={null}>
               <TrophiesView
-              gameName={detailGame.name}
-              coverUrl={detailGame.gridImageUrl || detailGame.squareGridImageUrl || detailGame.iconDataUrl}
-              logoUrl={detailGame.logoImageUrl}
-              heroUrl={detailGame.heroImageUrl}
-              steamAppId={detailGame.steamAppId}
-              achievements={detailAchievements}
-              loading={detailInfoLoading}
-              selectedIndex={achievementListIndex}
-              language={language}
-              onClose={() => setAchievementsView(false)}
-            />
+                gameName={detailGame.name}
+                coverUrl={detailGame.gridImageUrl || detailGame.squareGridImageUrl || detailGame.iconDataUrl}
+                logoUrl={detailGame.logoImageUrl}
+                heroUrl={detailGame.heroImageUrl}
+                steamAppId={detailGame.steamAppId}
+                achievements={detailAchievements}
+                loading={detailInfoLoading}
+                selectedIndex={achievementListIndex}
+                language={language}
+                onClose={() => setAchievementsView(false)}
+              />
             </Suspense>
           )}
         </div>
@@ -6969,25 +6969,25 @@ function App(): React.JSX.Element {
 
       {/* ── Downloads Modal (PS5 Composition) ── */}
       <Suspense fallback={null}>
-      <DownloadsModal
-        isOpen={showDownloadsModal}
-        onClose={() => setShowDownloadsModal(false)}
-        downloads={steamDownloads}
-        forgottenDownloads={forgottenDownloads}
-        onForgetDownload={(appId) => {
-          const newSet = new Set(forgottenDownloads).add(appId)
-          setForgottenDownloads(newSet)
-          localStorage.setItem(FORGOTTEN_DOWNLOADS_KEY, JSON.stringify([...newSet]))
-        }}
-        games={games}
-        steamLibrary={steamLibrary}
-        language={language}
-        onSelectGame={(gameId) => {
-          setLibraryView(false)
-          setDetailGameId(gameId)
-          setShowDownloadsModal(false)
-        }}
-      />
+        <DownloadsModal
+          isOpen={showDownloadsModal}
+          onClose={() => setShowDownloadsModal(false)}
+          downloads={steamDownloads}
+          forgottenDownloads={forgottenDownloads}
+          onForgetDownload={(appId) => {
+            const newSet = new Set(forgottenDownloads).add(appId)
+            setForgottenDownloads(newSet)
+            localStorage.setItem(FORGOTTEN_DOWNLOADS_KEY, JSON.stringify([...newSet]))
+          }}
+          games={games}
+          steamLibrary={steamLibrary}
+          language={language}
+          onSelectGame={(gameId) => {
+            setLibraryView(false)
+            setDetailGameId(gameId)
+            setShowDownloadsModal(false)
+          }}
+        />
       </Suspense>
 
       {/* ── Notification Container ── */}
@@ -7061,11 +7061,11 @@ function App(): React.JSX.Element {
 
       {/* ── Modal Helper (Tutorial de Bienvenida) ── */}
       <Suspense fallback={null}>
-      <ModalHelper
-        isOpen={showHelperModal}
-        onClose={() => setShowHelperModal(false)}
-        language={language}
-      />
+        <ModalHelper
+          isOpen={showHelperModal}
+          onClose={() => setShowHelperModal(false)}
+          language={language}
+        />
       </Suspense>
 
       {/* ── Port Change Modal ── */}
