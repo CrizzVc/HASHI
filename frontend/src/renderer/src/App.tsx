@@ -3763,6 +3763,56 @@ function App(): React.JSX.Element {
     })
   }, [selectedGameId, visibleGames])
 
+  // Scroll-driven lateral mask: applies smooth gradient fade at the edges
+  useEffect(() => {
+    const row = gamesRowRef.current
+    if (!row) return
+
+    const update = (): void => {
+      const { scrollLeft, scrollWidth, clientWidth } = row
+      const maxScroll = Math.max(0, scrollWidth - clientWidth)
+
+      // Si todo el contenido cabe en pantalla, no hay desvanecimiento
+      if (maxScroll <= 0) {
+        row.style.setProperty('--mask-left', '0px')
+        row.style.setProperty('--mask-right', '0px')
+        return
+      }
+
+      // Ancho del desvanecimiento en px (alrededor del 12-14% del ancho visible)
+      const maxFadePx = Math.min(140, Math.max(40, clientWidth * 0.12))
+      const fadeThreshold = Math.min(80, Math.max(20, maxScroll / 4))
+
+      // Izquierda: 0px cuando el cuadro de home está al inicio, aparece suavemente al hacer scroll
+      const leftRatio = Math.max(0, Math.min(1, scrollLeft / fadeThreshold))
+      const leftPx = Math.round(leftRatio * maxFadePx)
+
+      // Derecha: visible mientras queden juegos hacia la derecha, desaparece suavemente al final
+      const remainingScroll = maxScroll - scrollLeft
+      const rightRatio = Math.max(0, Math.min(1, remainingScroll / fadeThreshold))
+      const rightPx = Math.round(rightRatio * maxFadePx)
+
+      row.style.setProperty('--mask-left', `${leftPx}px`)
+      row.style.setProperty('--mask-right', `${rightPx}px`)
+    }
+
+    update()
+    const rafId = requestAnimationFrame(update)
+    const timerId = setTimeout(update, 250)
+
+    row.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(row)
+    if (row.firstElementChild) ro.observe(row.firstElementChild)
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      clearTimeout(timerId)
+      row.removeEventListener('scroll', update)
+      ro.disconnect()
+    }
+  }, [selectedGameId, visibleGames])
+
   useEffect(() => {
     if (!libraryView) return
     // Resetear translateY al cambiar fuente o entrar a la biblioteca
