@@ -357,17 +357,17 @@
      - La capa superior aplica el degradado suave solo en el área de las carátulas.
      - La capa inferior (14px) se mantiene 100% sólida para que la barra de scroll nunca se difumine. */
   --mask-left: 0px;
-  --mask-right: 120px;
+  --mask-right: 0px;
 
   -webkit-mask-image:
-    linear-gradient(to right, transparent 0px, black var(--mask-left, 0px), black calc(100% - var(--mask-right, 120px)), transparent 100%),
+    linear-gradient(to right, transparent 0px, black var(--mask-left, 0px), black calc(100% - var(--mask-right, 0px)), transparent 100%),
     linear-gradient(black, black);
   -webkit-mask-size: 100% calc(100% - 14px), 100% 14px;
   -webkit-mask-position: top left, bottom left;
   -webkit-mask-repeat: no-repeat;
 
   mask-image:
-    linear-gradient(to right, transparent 0px, black var(--mask-left, 0px), black calc(100% - var(--mask-right, 120px)), transparent 100%),
+    linear-gradient(to right, transparent 0px, black var(--mask-left, 0px), black calc(100% - var(--mask-right, 0px)), transparent 100%),
     linear-gradient(black, black);
   mask-size: 100% calc(100% - 14px), 100% 14px;
   mask-position: top left, bottom left;

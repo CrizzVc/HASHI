@@ -3763,7 +3763,7 @@ function App(): React.JSX.Element {
     })
   }, [selectedGameId, visibleGames])
 
-  // Scroll-driven lateral mask: applies smooth gradient fade at the edges
+  // Scroll-driven lateral mask: desvanecimiento solo durante el movimiento entre extremos
   useEffect(() => {
     const row = gamesRowRef.current
     if (!row) return
@@ -3779,21 +3779,19 @@ function App(): React.JSX.Element {
         return
       }
 
-      // Ancho del desvanecimiento en px (alrededor del 12-14% del ancho visible)
+      // Distancia al extremo más cercano (0 si está al inicio o al final)
+      const distFromExtreme = Math.min(scrollLeft, maxScroll - scrollLeft)
+
+      // En los extremos no aparece desvanecimiento en ningún lateral.
+      // Durante el movimiento intermedio, aparece de forma suave en ambos lados.
       const maxFadePx = Math.min(140, Math.max(40, clientWidth * 0.12))
       const fadeThreshold = Math.min(80, Math.max(20, maxScroll / 4))
 
-      // Izquierda: 0px cuando el cuadro de home está al inicio, aparece suavemente al hacer scroll
-      const leftRatio = Math.max(0, Math.min(1, scrollLeft / fadeThreshold))
-      const leftPx = Math.round(leftRatio * maxFadePx)
+      const motionFactor = Math.max(0, Math.min(1, distFromExtreme / fadeThreshold))
+      const fadePx = Math.round(motionFactor * maxFadePx)
 
-      // Derecha: visible mientras queden juegos hacia la derecha, desaparece suavemente al final
-      const remainingScroll = maxScroll - scrollLeft
-      const rightRatio = Math.max(0, Math.min(1, remainingScroll / fadeThreshold))
-      const rightPx = Math.round(rightRatio * maxFadePx)
-
-      row.style.setProperty('--mask-left', `${leftPx}px`)
-      row.style.setProperty('--mask-right', `${rightPx}px`)
+      row.style.setProperty('--mask-left', `${fadePx}px`)
+      row.style.setProperty('--mask-right', `${fadePx}px`)
     }
 
     update()
