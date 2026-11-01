@@ -314,10 +314,11 @@ export async function getSteamFriends({ key, steamId }) {
           profileurl: player?.profileurl || null,
           personastate: Number(player?.personastate || 0),
           gameid: player?.gameid || null,
-          gameextrainfo: player?.gameextrainfo || null
+          gameextrainfo: player?.gameextrainfo || null,
+          lastlogoff: player?.lastlogoff ? Number(player.lastlogoff) : null
         };
       })
-      .filter((friend) => Boolean(friend.avatarfull));
+      .filter((friend) => Boolean(friend.avatarfull || friend.steamid));
 
     return mappedFriends;
   } catch (err) {

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import {
   PlayIcon,
   PlusIcon,
@@ -36,6 +36,7 @@ import LaunchErrorNotification, { LaunchErrorNotificationData } from './componen
 import { TopBarClock } from './components/TopBarClock'
 import { type MediaItem } from './components/MediaDetailView'
 import { useFriendNotifications } from './hooks/useFriendNotifications'
+import FriendsDrawer from './components/FriendsDrawer'
 import { useSteamDownloads } from './hooks/useSteamDownloads'
 
 const DownloadsModal = lazy(() =>
@@ -288,6 +289,7 @@ interface SteamFriend {
   personastate?: number
   gameid?: string | null
   gameextrainfo?: string | null
+  lastlogoff?: number | null
 }
 
 type SteamGridArtType = 'grids' | 'square_grids' | 'heroes' | 'logos' | 'icons'
@@ -542,6 +544,7 @@ function App(): React.JSX.Element {
     steamId64: null
   })
   const [steamFriends, setSteamFriends] = useState<SteamFriend[]>([])
+  const [friendsDrawerOpen, setFriendsDrawerOpen] = useState(false)
   const [selectedFriend, setSelectedFriend] = useState<SteamFriend | null>(null)
   const [selectedFriendBackground, setSelectedFriendBackground] = useState<string | null>(null)
   const [steamLibrary, setSteamLibrary] = useState<SteamLibraryGame[]>([])
@@ -1898,9 +1901,10 @@ function App(): React.JSX.Element {
           profileurl: friend.profileurl || null,
           personastate: Number(friend.personastate || 0),
           gameid: friend.gameid || null,
-          gameextrainfo: friend.gameextrainfo || null
+          gameextrainfo: friend.gameextrainfo || null,
+          lastlogoff: friend.lastlogoff ? Number(friend.lastlogoff) : null
         }))
-        .filter((friend) => Boolean(friend.avatarfull))
+        .filter((friend) => Boolean(friend.avatarfull || friend.steamid))
 
       setSteamFriends(normalizedFriends)
     } catch (err) {
@@ -3128,6 +3132,15 @@ function App(): React.JSX.Element {
         return
       }
 
+      if (friendsDrawerOpen) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          playClose()
+          setFriendsDrawerOpen(false)
+          return
+        }
+      }
+
       if (selectedFriend) {
         const friendIndex = sortedSteamFriends.findIndex((friend) => friend.steamid === selectedFriend.steamid)
         if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
@@ -3601,11 +3614,8 @@ function App(): React.JSX.Element {
             setHomeCardMode('quick-apps')
             setQuickAppFocusIndex(0)
           } else if (bottomCardIndex === 4) {
-            const firstFriend = sortedSteamFriends[0]
-            if (firstFriend) {
-              playEnter()
-              setSelectedFriend(firstFriend)
-            }
+            playEnter()
+            setFriendsDrawerOpen(true)
           }
         } else if (e.key === 'Escape') {
           e.preventDefault()
@@ -4534,7 +4544,7 @@ function App(): React.JSX.Element {
         </div>
 
         <div className={`bottom-card friends-exit-card ${homeCardMode === 'bottom' && bottomCardIndex === 4 ? 'selected' : ''} ${windowSize.width === 1380 && windowSize.height === 830 ? 'minimal' : ''}`} id="btn-exit">
-          <div className="friends-card-left">
+          <div className="friends-card-left" onClick={() => { playEnter(); setFriendsDrawerOpen(true) }} style={{ cursor: 'pointer' }}>
             <div className="friends-ring-wrap">
               <svg width="110" height="110" viewBox="0 0 120 120">
                 <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="10" />
@@ -4572,14 +4582,14 @@ function App(): React.JSX.Element {
                   key={friend ? friend.steamid : `friend-slot-${index}`}
                   className={`friend-avatar ${friend ? '' : 'empty'} ${friend && isFriendActive(friend) ? 'active' : ''}`}
                   style={{ zIndex: 5 - index }}
-                  onClick={friend ? () => { playEnter(); setSelectedFriend(friend) } : undefined}
-                  onKeyDown={friend ? (event) => {
+                  onClick={() => { playEnter(); setFriendsDrawerOpen(true) }}
+                  onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault()
                       playEnter()
-                      setSelectedFriend(friend)
+                      setFriendsDrawerOpen(true)
                     }
-                  } : undefined}
+                  }}
                   role={friend ? 'button' : undefined}
                   tabIndex={friend ? 0 : undefined}
                 >
@@ -4654,6 +4664,22 @@ function App(): React.JSX.Element {
           </div>
         </div>
       </div>
+
+      {/* ── Quick Access Menu: Steam Deck Friends Panel ── */}
+      <FriendsDrawer
+        isOpen={friendsDrawerOpen}
+        onClose={() => setFriendsDrawerOpen(false)}
+        friends={sortedSteamFriends}
+        onOpenSettings={() => setModal('settings')}
+        onOpenSpecs={() => handleOpenSpecs()}
+        onOpenHelp={() => setShowHelperModal(true)}
+        notificationsCount={notifications.length}
+        nowPlayingTitle={friendsMusicTitle}
+        playEnter={playEnter}
+        playClose={playClose}
+        playMove={playMove}
+        language={language}
+      />
 
       {selectedFriend && (
         <div className="friend-panel-layer" role="presentation">
