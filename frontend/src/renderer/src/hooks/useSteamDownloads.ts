@@ -28,9 +28,10 @@ export function useSteamDownloads(pollIntervalMs: number = 1000): {
 } {
   const [downloads, setDownloads] = useState<SteamDownloadItem[]>([])
   const [completedDownloads, setCompletedDownloads] = useState<DownloadCompletion[]>([])
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const mountedRef = useRef(true)
   const prevDownloadsRef = useRef<Map<string, SteamDownloadItem>>(new Map())
+  const hasActiveDownloadsRef = useRef(false)
+  hasActiveDownloadsRef.current = downloads.length > 0
   // Skip completion detection on the first poll: prevMap is empty so every game
   // that was already installed would be treated as a fresh completion.
   const isFirstPollRef = useRef(true)
@@ -92,21 +93,51 @@ export function useSteamDownloads(pollIntervalMs: number = 1000): {
 
     fetchDownloads()
 
-    intervalRef.current = setInterval(() => {
-      fetchDownloads()
-    }, pollIntervalMs)
+    let timerId: ReturnType<typeof setTimeout> | null = null
 
-    // Listen for real-time updates from main process (fs.watch on appmanifest)
+    const scheduleNext = (): void => {
+      if (timerId) {
+        clearTimeout(timerId)
+        timerId = null
+      }
+      if (!mountedRef.current) return
+      // Pausar completamente el sondeo si la ventana está minimizada u oculta
+      if (typeof document !== 'undefined' && document.hidden) {
+        return
+      }
+      // Si hay descargas activas, sondeo rápido (1s) para fluidez;
+      // si está en reposo sin descargas, sondeo relajado (4s) para evitar I/O y uso de RAM innecesario.
+      const delay = hasActiveDownloadsRef.current ? pollIntervalMs : 4000
+      timerId = setTimeout(() => {
+        if (!mountedRef.current) return
+        fetchDownloads()
+        scheduleNext()
+      }, delay)
+    }
+
+    scheduleNext()
+
+    // Reanudar inmediatamente cuando la ventana vuelve a primer plano
+    const handleVisibilityChange = (): void => {
+      if (typeof document !== 'undefined' && !document.hidden && mountedRef.current) {
+        fetchDownloads()
+        scheduleNext()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // Escuchar eventos en tiempo real desde el proceso principal (fs.watch sobre appmanifest)
     const removeListener = window.electron?.ipcRenderer?.on?.('steam-download-updated', () => {
-      fetchDownloads()
+      if (mountedRef.current) {
+        fetchDownloads()
+        scheduleNext()
+      }
     })
 
     return () => {
       mountedRef.current = false
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
+      if (timerId) clearTimeout(timerId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (removeListener) removeListener()
     }
   }, [fetchDownloads, pollIntervalMs])

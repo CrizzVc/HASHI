@@ -1549,7 +1549,7 @@ function App(): React.JSX.Element {
     }
 
     const check = (): void => {
-      if (isGameRunningRef.current) return
+      if (isGameRunningRef.current || (typeof document !== 'undefined' && document.hidden)) return
       try {
         const pads = navigator.getGamepads ? navigator.getGamepads() : []
         const connected = Array.from(pads || []).some((p) => !!p)
@@ -1592,6 +1592,14 @@ function App(): React.JSX.Element {
   // para no releerlo del disco cada vez que se vuelve a pasar por esa wallpaper.
   const wallpaperPreviewCacheRef = useRef<Map<string, string>>(new Map())
   const [wallpaperBgHiRes, setWallpaperBgHiRes] = useState<string | null>(null)
+
+  // Liberar memoria de previews HD cuando no se está en modo wallpaper
+  useEffect(() => {
+    if (!isWallpaperMode) {
+      wallpaperPreviewCacheRef.current.clear()
+      setWallpaperBgHiRes(null)
+    }
+  }, [isWallpaperMode])
 
   // Pre-cargar en memoria los previews HD de las wallpapers adyacentes para navegación instantánea
   useEffect(() => {
@@ -1893,8 +1901,21 @@ function App(): React.JSX.Element {
     if (steamAccount.linked) {
       void loadSteamLibrary()
       void loadSteamFriends()
-      const friendsRefresh = window.setInterval(() => { void loadSteamFriends() }, 10000)
-      return () => window.clearInterval(friendsRefresh)
+      const friendsRefresh = window.setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return
+        if (isGameRunningRef.current || (typeof document !== 'undefined' && document.hidden)) return
+        void loadSteamFriends()
+      }, 10000)
+      const handleVis = (): void => {
+        if (typeof document !== 'undefined' && !document.hidden && !isGameRunningRef.current) {
+          void loadSteamFriends()
+        }
+      }
+      document.addEventListener('visibilitychange', handleVis)
+      return () => {
+        window.clearInterval(friendsRefresh)
+        document.removeEventListener('visibilitychange', handleVis)
+      }
     } else {
       setSteamLibrary([])
       setSteamFriends([])
@@ -1927,7 +1948,7 @@ function App(): React.JSX.Element {
   useEffect(() => {
     if (stores.length <= 1 || storeHover) return
     const interval = setInterval(() => {
-      if (isGameRunningRef.current) return
+      if (isGameRunningRef.current || (typeof document !== 'undefined' && document.hidden)) return
       setCurrentStoreIndex((prev) => (prev + 1) % stores.length)
     }, 4000)
     return () => clearInterval(interval)

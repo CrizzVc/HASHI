@@ -1195,6 +1195,7 @@ async function fetchMediaSessionsForRenderer(): Promise<any[]> {
 
 function broadcastMediaSessions(): void {
   if (isGameRunning) return
+  if (mainWindowRef && (!mainWindowRef.isVisible() || mainWindowRef.isMinimized())) return
   fetchMediaSessionsForRenderer()
     .then((sessions) => {
       if (mainWindowRef && !mainWindowRef.isDestroyed()) {
@@ -1521,6 +1522,7 @@ function createWindow(): void {
 
   mainWindow.on('enter-full-screen', forceLayoutRefresh)
   mainWindow.on('leave-full-screen', forceLayoutRefresh)
+  mainWindow.on('restore', () => { broadcastMediaSessions() })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -3126,6 +3128,8 @@ app.whenReady().then(() => {
 
   // Backup timer: re-parse content_log.txt every 2 seconds for smooth progress
   const downloadParseInterval = setInterval(() => {
+    if (isGameRunning) return
+    if (mainWindowRef && (!mainWindowRef.isVisible() || mainWindowRef.isMinimized())) return
     parseContentLogForDownloads()
     if (mainWindowRef && !mainWindowRef.isDestroyed()) {
       mainWindowRef.webContents.send('steam-download-updated')

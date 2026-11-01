@@ -86,6 +86,11 @@ export function useGamepadNavigation(enabled: boolean = true): void {
     let rafId: number
 
     const poll = (): void => {
+      // Si la ventana está oculta o minimizada, detener el ciclo de rAF para no consumir recursos
+      if (typeof document !== 'undefined' && document.hidden) {
+        return
+      }
+
       const pads = navigator.getGamepads ? navigator.getGamepads() : []
       const now = performance.now()
       const pressed: Partial<Record<NavKey, boolean>> = {}
@@ -143,6 +148,18 @@ export function useGamepadNavigation(enabled: boolean = true): void {
     }
 
     rafId = requestAnimationFrame(poll)
-    return () => cancelAnimationFrame(rafId)
+
+    const handleVisibility = (): void => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        cancelAnimationFrame(rafId)
+        rafId = requestAnimationFrame(poll)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [enabled])
 }
