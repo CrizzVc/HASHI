@@ -352,31 +352,49 @@
   overflow-x: auto;
   padding: 8px 4px;
   scroll-behavior: smooth;
-
-  /* Máscara de desvanecimiento lateral progresiva (inspirada en linear-gradient mask)
-     - La capa superior aplica el degradado suave solo en el área de las carátulas.
-     - La capa inferior (14px) se mantiene 100% sólida para que la barra de scroll nunca se difumine. */
-  --mask-left: 0px;
-  --mask-right: 0px;
-
-  -webkit-mask-image:
-    linear-gradient(to right, transparent 0px, black var(--mask-left, 0px), black calc(100% - var(--mask-right, 0px)), transparent 100%),
-    linear-gradient(black, black);
-  -webkit-mask-size: 100% calc(100% - 14px), 100% 14px;
-  -webkit-mask-position: top left, bottom left;
-  -webkit-mask-repeat: no-repeat;
-
-  mask-image:
-    linear-gradient(to right, transparent 0px, black var(--mask-left, 0px), black calc(100% - var(--mask-right, 0px)), transparent 100%),
-    linear-gradient(black, black);
-  mask-size: 100% calc(100% - 14px), 100% 14px;
-  mask-position: top left, bottom left;
-  mask-repeat: no-repeat;
 }
 
 .games-row::-webkit-scrollbar {
   height: 4px;
 }
+
+/* ── Desvanecimiento lateral en los bordes de las carátulas (durante el scroll) ── */
+.games-row-fade {
+  position: absolute;
+  top: 0;
+  bottom: 24px;
+  /* deja la barra de scroll completamente libre abajo */
+  width: clamp(100px, 12vw, 180px);
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 250ms ease;
+}
+
+.games-row-fade--left {
+  left: 28px;
+  background: linear-gradient(to right, #0c0c0c 0%, rgba(12, 12, 12, 0.6) 40%, transparent 100%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(2px);
+  -webkit-mask-image: linear-gradient(to right, black 25%, transparent 100%);
+  mask-image: linear-gradient(to right, black 25%, transparent 100%);
+  height: 193px;
+  display: flex;
+  align-self: center;
+}
+
+.games-row-fade--right {
+  right: 28px;
+  background: linear-gradient(to left, #0c0c0c 0%, rgba(12, 12, 12, 0.6) 40%, transparent 100%);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(2px);
+  -webkit-mask-image: linear-gradient(to left, black 25%, transparent 100%);
+  mask-image: linear-gradient(to left, black 25%, transparent 100%);
+  height: 193px;
+  display: flex;
+  align-self: center;
+}
+
 
 .game-card {
   flex-shrink: 0;
@@ -4012,6 +4030,18 @@
     padding: 0 36px 22px;
   }
 
+  .games-row-fade--left {
+    left: 36px;
+  }
+
+  .games-row-fade--right {
+    right: 36px;
+  }
+
+  .games-row-fade {
+    bottom: 28px;
+  }
+
   .game-card {
     width: clamp(180px, 10vw, 260px);
   }
@@ -4044,6 +4074,18 @@
 
   .games-row-container {
     padding: 0 40px 26px;
+  }
+
+  .games-row-fade--left {
+    left: 40px;
+  }
+
+  .games-row-fade--right {
+    right: 40px;
+  }
+
+  .games-row-fade {
+    bottom: 32px;
   }
 
   .bottom-row {

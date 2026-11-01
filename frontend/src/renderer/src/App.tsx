@@ -1240,6 +1240,8 @@ function App(): React.JSX.Element {
   })
 
   const gamesRowRef = useRef<HTMLDivElement>(null)
+  const rowFadeLeftRef = useRef<HTMLDivElement>(null)
+  const rowFadeRightRef = useRef<HTMLDivElement>(null)
   const libraryGridRef = useRef<HTMLDivElement>(null)
   // Offset actual del grid (translateY en px, negativo = scrolleado hacia abajo)
   const libraryTranslateYRef = useRef<number>(0)
@@ -3763,7 +3765,7 @@ function App(): React.JSX.Element {
     })
   }, [selectedGameId, visibleGames])
 
-  // Scroll-driven lateral mask: desvanecimiento solo durante el movimiento entre extremos
+  // Desvanecimiento lateral: visible solo durante el desplazamiento entre extremos
   useEffect(() => {
     const row = gamesRowRef.current
     if (!row) return
@@ -3774,24 +3776,21 @@ function App(): React.JSX.Element {
 
       // Si todo el contenido cabe en pantalla, no hay desvanecimiento
       if (maxScroll <= 0) {
-        row.style.setProperty('--mask-left', '0px')
-        row.style.setProperty('--mask-right', '0px')
+        if (rowFadeLeftRef.current) rowFadeLeftRef.current.style.opacity = '0'
+        if (rowFadeRightRef.current) rowFadeRightRef.current.style.opacity = '0'
         return
       }
 
-      // Distancia al extremo más cercano (0 si está al inicio o al final)
+      // Distancia al extremo más cercano (0 en el inicio y en el final)
       const distFromExtreme = Math.min(scrollLeft, maxScroll - scrollLeft)
 
-      // En los extremos no aparece desvanecimiento en ningún lateral.
-      // Durante el movimiento intermedio, aparece de forma suave en ambos lados.
-      const maxFadePx = Math.min(140, Math.max(40, clientWidth * 0.12))
-      const fadeThreshold = Math.min(80, Math.max(20, maxScroll / 4))
+      // En los extremos (Home a la izquierda o último juego a la derecha): opacidad 0
+      // Durante el movimiento intermedio: opacidad 1 progresiva
+      const threshold = Math.min(80, Math.max(20, maxScroll / 4))
+      const opacity = distFromExtreme < 8 ? 0 : Math.min(1, (distFromExtreme - 8) / threshold)
 
-      const motionFactor = Math.max(0, Math.min(1, distFromExtreme / fadeThreshold))
-      const fadePx = Math.round(motionFactor * maxFadePx)
-
-      row.style.setProperty('--mask-left', `${fadePx}px`)
-      row.style.setProperty('--mask-right', `${fadePx}px`)
+      if (rowFadeLeftRef.current) rowFadeLeftRef.current.style.opacity = String(opacity)
+      if (rowFadeRightRef.current) rowFadeRightRef.current.style.opacity = String(opacity)
     }
 
     update()
@@ -4267,6 +4266,9 @@ function App(): React.JSX.Element {
 
       {/* ── Game cards row ── */}
       <div className="games-row-container">
+        {/* Desvanecimiento lateral: visible solo en movimiento, oculto en extremos */}
+        <div className="games-row-fade games-row-fade--left" ref={rowFadeLeftRef} aria-hidden />
+        <div className="games-row-fade games-row-fade--right" ref={rowFadeRightRef} aria-hidden />
         <div className="games-row" ref={gamesRowRef}>
           {/* Library card */}
           <div
