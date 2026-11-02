@@ -1887,7 +1887,9 @@ function App(): React.JSX.Element {
 
       const res = await fetch(`${getBackendUrl()}/api/steam/friends?${query.toString()}`)
       if (!res.ok) {
-        setSteamFriends([])
+        // No borrar la lista en errores de refresco para evitar parpadeos;
+        // solo limpiar si aún no hay datos cargados.
+        setSteamFriends((prev) => (prev.length > 0 ? prev : []))
         return
       }
 
@@ -1908,8 +1910,8 @@ function App(): React.JSX.Element {
 
       setSteamFriends(normalizedFriends)
     } catch (err) {
+      // No borrar la lista en errores transitorios de red para evitar parpadeos.
       console.error('Error loading Steam friends:', err)
-      setSteamFriends([])
     }
   }, [steamAccount])
 
@@ -4049,15 +4051,23 @@ function App(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bgKey])
 
-  // Biblioteca: hero con crossfade también
+  // Biblioteca: hero con crossfade también.
+  // Se aplica un debounce al URL del hero para evitar parpadeos al navegar
+  // rápidamente con flechas/gamepad: el banner solo cambia si el usuario se
+  // detiene ≥350 ms sobre un juego.
   const libraryHeroUrl = librarySource === 'steam' ? steamBanner : (librarySelectedGame?.heroImageUrl ?? null)
-  const [libPrevUrl, setLibPrevUrl] = useState<string | null>(null)
-  const [libCurrUrl, setLibCurrUrl] = useState<string | null>(libraryHeroUrl)
-  const libKeyRef = useRef<string | null>(libraryHeroUrl)
+  const [debouncedLibraryHeroUrl, setDebouncedLibraryHeroUrl] = useState<string | null>(libraryHeroUrl)
   useEffect(() => {
-    if (libKeyRef.current === libraryHeroUrl) return undefined
+    const timer = window.setTimeout(() => setDebouncedLibraryHeroUrl(libraryHeroUrl), 350)
+    return () => window.clearTimeout(timer)
+  }, [libraryHeroUrl])
+  const [libPrevUrl, setLibPrevUrl] = useState<string | null>(null)
+  const [libCurrUrl, setLibCurrUrl] = useState<string | null>(debouncedLibraryHeroUrl)
+  const libKeyRef = useRef<string | null>(debouncedLibraryHeroUrl)
+  useEffect(() => {
+    if (libKeyRef.current === debouncedLibraryHeroUrl) return undefined
     const prev = libCurrUrl
-    const next = libraryHeroUrl
+    const next = debouncedLibraryHeroUrl
     const doSwapLib = (): void => {
       setLibPrevUrl(prev)
       setLibCurrUrl(next)
@@ -4078,7 +4088,7 @@ function App(): React.JSX.Element {
       doSwapLib()
       return undefined
     }
-  }, [libraryHeroUrl, libCurrUrl])
+  }, [debouncedLibraryHeroUrl, libCurrUrl])
 
   const steamDetailIsInstalled = Boolean(
     detailGame?.isSteam && detailGame.steamAppId && steamLibrary.some((game) => String(game.appid) === detailGame.steamAppId && game.installed)
@@ -5798,14 +5808,12 @@ function App(): React.JSX.Element {
               <div className="library-hero">
                 {libPrevUrl && (
                   <div
-                    key={`lib-prev-${libPrevUrl}`}
                     className="library-hero-bg prev"
                     style={{ backgroundImage: `linear-gradient(to top, rgba(12, 12, 12, 0.98) 0%, rgba(12, 12, 12, 0.7) 42%, rgba(12, 12, 12, 0.08) 100%), url(${libPrevUrl})` }}
                     aria-hidden
                   />
                 )}
                 <div
-                  key={`lib-curr-${libCurrUrl ?? 'empty'}`}
                   className="library-hero-bg current"
                   style={libCurrUrl ? { backgroundImage: `linear-gradient(to top, rgba(12, 12, 12, 0.98) 0%, rgba(12, 12, 12, 0.7) 42%, rgba(12, 12, 12, 0.08) 100%), url(${libCurrUrl})` } : undefined}
                 />
