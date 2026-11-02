@@ -619,9 +619,12 @@
   text-align: left;
 }
 
-.qam-dialog-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+.qam-dialog-btn:hover,
+.qam-dialog-btn.focused {
+  background: rgba(255, 255, 255, 0.12);
   color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+  outline: 2px solid rgba(255, 255, 255, 0.35);
 }
 
 .qam-dialog-btn.highlight {
@@ -631,6 +634,9 @@
   font-weight: 600;
 }
 
-.qam-dialog-btn.highlight:hover {
+.qam-dialog-btn.highlight:hover,
+.qam-dialog-btn.highlight.focused {
   background: #33dcff;
+  border-color: #ffffff;
+  outline: 2px solid #00d2ff;
 }

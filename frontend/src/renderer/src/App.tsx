@@ -3133,12 +3133,7 @@ function App(): React.JSX.Element {
       }
 
       if (friendsDrawerOpen) {
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          playClose()
-          setFriendsDrawerOpen(false)
-          return
-        }
+        return
       }
 
       if (selectedFriend) {
@@ -3757,7 +3752,7 @@ function App(): React.JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, showHelperModal, pendingQuickApp, showDownloadsModal, nativeView, activeEmbeddedView, activeExtension, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, downloadContextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal, resetSgdbState, bootVideoPreview, settingsTab])
+  }, [libraryView, games, librarySelectedGame, selectedGameId, sidebarOpen, sidebarIndex, modal, showHelperModal, pendingQuickApp, showDownloadsModal, nativeView, activeEmbeddedView, activeExtension, visibleGames, handleLaunchGame, openLibraryView, openAddGameModal, handleOpenSpecs, openExtension, sidebarExtensions, isWallpaperMode, wallpaperImages.length, handleChooseWallpaperAsHome, detailGameId, detailFocus, detailScreenshots.length, detailGame, detailAchievements.length, achievementsView, librarySource, currentLibraryItems, selectedSteamAppId, steamLibrary, contextMenu.visible, downloadContextMenu.visible, selectedFriend, sortedSteamFriends, isHomeFocused, isHomeCardFocused, enterHomeIdle, quickAppFocusIndex, quickAppSlots, homeCardMode, bottomCardIndex, stores, currentStoreIndex, handleOpenStore, handleLaunchQuickApp, handleAddQuickApp, multimediaFocus, continueWatchingIndex, heroSlides.length, multimediaCards.length, openEditGameModal, resetSgdbState, bootVideoPreview, settingsTab, friendsDrawerOpen])
 
   // ── Detail view handlers (con sonidos) ──
   const handleCloseDetail = useCallback(() => {

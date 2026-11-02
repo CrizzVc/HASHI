@@ -138,6 +138,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
     }
   })
   const [selectedFriendForAction, setSelectedFriendForAction] = useState<SteamFriend | null>(null)
+  const [actionFocusIndex, setActionFocusIndex] = useState<number>(0)
   const [copiedId, setCopiedId] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState<number>(-1)
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({})
@@ -213,83 +214,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
     setFocusedIndex(-1)
   }
 
-  // Keyboard navigation
-  useEffect(() => {
-    if (!isOpen) {
-      setFocusedIndex(-1)
-      setSelectedFriendForAction(null)
-      return
-    }
-
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        if (selectedFriendForAction) {
-          playClose?.()
-          setSelectedFriendForAction(null)
-        } else {
-          playClose?.()
-          onClose()
-        }
-        return
-      }
-
-      if (selectedFriendForAction) {
-        return // Acciones modal abierto
-      }
-
-      // L1 / R1
-      if (e.key === 'BrowserBack') {
-        e.preventDefault()
-        handlePrevTab()
-        return
-      }
-      if (e.key === 'BrowserForward') {
-        e.preventDefault()
-        handleNextTab()
-        return
-      }
-
-      // Navegación en la lista
-      if (currentNavList.length > 0) {
-        if (e.key === 'ArrowDown') {
-          e.preventDefault()
-          playMove?.()
-          setFocusedIndex((prev) => {
-            const next = prev < currentNavList.length - 1 ? prev + 1 : 0
-            const el = document.getElementById(`friend-item-${currentNavList[next]?.steamid}`)
-            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-            return next
-          })
-          return
-        }
-        if (e.key === 'ArrowUp') {
-          e.preventDefault()
-          playMove?.()
-          setFocusedIndex((prev) => {
-            const next = prev > 0 ? prev - 1 : currentNavList.length - 1
-            const el = document.getElementById(`friend-item-${currentNavList[next]?.steamid}`)
-            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-            return next
-          })
-          return
-        }
-        if (e.key === 'Enter') {
-          if (focusedIndex >= 0 && currentNavList[focusedIndex]) {
-            e.preventDefault()
-            playEnter?.()
-            setSelectedFriendForAction(currentNavList[focusedIndex])
-          }
-        }
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, selectedFriendForAction, currentNavList, focusedIndex, onClose, playClose, playEnter, playMove])
-
-  if (!isOpen) return null
-
+  // Acciones sobre amigos
   const handleOpenAddFriend = async (): Promise<void> => {
     playEnter?.()
     const url = 'steam://openurl/https://steamcommunity.com/actions/AddFriend'
@@ -350,6 +275,175 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
       return 'default'
     })
   }
+
+  const availableActions = useMemo(() => {
+    if (!selectedFriendForAction) return []
+    const actions: {
+      id: string
+      label: string
+      icon: React.ReactNode
+      onClick: () => void
+      highlight?: boolean
+    }[] = []
+
+    if (selectedFriendForAction.gameid) {
+      actions.push({
+        id: 'join',
+        label: language === 'es' ? 'Unirse a la partida' : 'Join game',
+        icon: <Gamepad2 size={16} />,
+        onClick: () => handleJoinFriendGame(selectedFriendForAction),
+        highlight: true
+      })
+    }
+
+    actions.push({
+      id: 'message',
+      label: language === 'es' ? 'Enviar mensaje' : 'Send message',
+      icon: <MessageCircle size={16} />,
+      onClick: () => handleSendFriendMessage(selectedFriendForAction)
+    })
+
+    actions.push({
+      id: 'profile',
+      label: language === 'es' ? 'Ver perfil de Steam' : 'View Steam profile',
+      icon: <ExternalLink size={16} />,
+      onClick: () => handleOpenFriendProfile(selectedFriendForAction)
+    })
+
+    const isFav = favoriteIds.includes(selectedFriendForAction.steamid)
+    actions.push({
+      id: 'favorite',
+      label: isFav
+        ? language === 'es'
+          ? 'Quitar de favoritos'
+          : 'Remove from favorites'
+        : language === 'es'
+          ? 'Añadir a favoritos'
+          : 'Add to favorites',
+      icon: (
+        <Star
+          size={16}
+          fill={isFav ? '#ffd700' : 'none'}
+          color={isFav ? '#ffd700' : 'currentColor'}
+        />
+      ),
+      onClick: () => toggleFavorite(selectedFriendForAction.steamid)
+    })
+
+    actions.push({
+      id: 'copyId',
+      label: copiedId
+        ? language === 'es'
+          ? '¡SteamID copiado!'
+          : 'SteamID copied!'
+        : 'Copiar SteamID',
+      icon: copiedId ? <Check size={16} color="#4cd964" /> : <Copy size={16} />,
+      onClick: () => handleCopySteamId(selectedFriendForAction.steamid)
+    })
+
+    return actions
+  }, [selectedFriendForAction, language, favoriteIds, copiedId])
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!isOpen) {
+      setFocusedIndex(-1)
+      setSelectedFriendForAction(null)
+      setActionFocusIndex(0)
+      return
+    }
+
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        if (selectedFriendForAction) {
+          playClose?.()
+          setSelectedFriendForAction(null)
+          setActionFocusIndex(0)
+        } else {
+          playClose?.()
+          onClose()
+        }
+        return
+      }
+
+      // Si el modal de acciones está abierto, navegar por sus opciones
+      if (selectedFriendForAction) {
+        if (availableActions.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            playMove?.()
+            setActionFocusIndex((prev) => (prev < availableActions.length - 1 ? prev + 1 : 0))
+            return
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            playMove?.()
+            setActionFocusIndex((prev) => (prev > 0 ? prev - 1 : availableActions.length - 1))
+            return
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            playEnter?.()
+            availableActions[actionFocusIndex]?.onClick()
+            return
+          }
+        }
+        return
+      }
+
+      // L1 / R1 o Flechas Izquierda / Derecha para cambiar pestañas
+      if (e.key === 'BrowserBack' || e.key === 'ArrowLeft') {
+        e.preventDefault()
+        handlePrevTab()
+        return
+      }
+      if (e.key === 'BrowserForward' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        handleNextTab()
+        return
+      }
+
+      // Navegación en la lista
+      if (currentNavList.length > 0) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          playMove?.()
+          setFocusedIndex((prev) => {
+            const next = prev < currentNavList.length - 1 ? prev + 1 : 0
+            const el = document.getElementById(`friend-item-${currentNavList[next]?.steamid}`)
+            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+            return next
+          })
+          return
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          playMove?.()
+          setFocusedIndex((prev) => {
+            const next = prev > 0 ? prev - 1 : currentNavList.length - 1
+            const el = document.getElementById(`friend-item-${currentNavList[next]?.steamid}`)
+            el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+            return next
+          })
+          return
+        }
+        if (e.key === 'Enter') {
+          if (focusedIndex >= 0 && currentNavList[focusedIndex]) {
+            e.preventDefault()
+            playEnter?.()
+            setSelectedFriendForAction(currentNavList[focusedIndex])
+            setActionFocusIndex(0)
+          }
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, selectedFriendForAction, actionFocusIndex, availableActions, currentNavList, focusedIndex, onClose, playClose, playEnter, playMove])
+
+  if (!isOpen) return null
 
   return (
     <div className="qam-friends-layer" role="presentation">
@@ -537,6 +631,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
                             onClick={() => {
                               playEnter?.()
                               setSelectedFriendForAction(friend)
+                              setActionFocusIndex(0)
                             }}
                           >
                             <div className="qam-avatar-wrap">
@@ -614,6 +709,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
                             onClick={() => {
                               playEnter?.()
                               setSelectedFriendForAction(friend)
+                              setActionFocusIndex(0)
                             }}
                           >
                             <div className="qam-avatar-wrap">
@@ -670,6 +766,8 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
                 ) : (
                   <div className="qam-list">
                     {favoriteFriends.map((friend) => {
+                      const globalIdx = currentNavList.findIndex((f) => f.steamid === friend.steamid)
+                      const isFocused = focusedIndex === globalIdx
                       const isOnline = isFriendOnline(friend)
                       const isPlaying = Boolean(friend.gameextrainfo)
                       const isAvatarBroken = avatarErrors[friend.steamid]
@@ -677,10 +775,12 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
                       return (
                         <div
                           key={friend.steamid}
-                          className={`qam-friend-item ${isOnline ? 'online' : 'offline'}`}
+                          id={`friend-item-${friend.steamid}`}
+                          className={`qam-friend-item ${isOnline ? 'online' : 'offline'} ${isFocused ? 'focused' : ''}`}
                           onClick={() => {
                             playEnter?.()
                             setSelectedFriendForAction(friend)
+                            setActionFocusIndex(0)
                           }}
                         >
                           <div className="qam-avatar-wrap">
@@ -806,61 +906,16 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
             </div>
 
             <div className="qam-dialog-actions">
-              {selectedFriendForAction.gameid && (
+              {availableActions.map((action, idx) => (
                 <button
-                  className="qam-dialog-btn highlight"
-                  onClick={() => handleJoinFriendGame(selectedFriendForAction)}
+                  key={action.id}
+                  className={`qam-dialog-btn ${action.highlight ? 'highlight' : ''} ${actionFocusIndex === idx ? 'focused' : ''}`}
+                  onClick={action.onClick}
                 >
-                  <Gamepad2 size={16} />
-                  {language === 'es' ? 'Unirse a la partida' : 'Join game'}
+                  {action.icon}
+                  {action.label}
                 </button>
-              )}
-
-              <button
-                className="qam-dialog-btn"
-                onClick={() => handleSendFriendMessage(selectedFriendForAction)}
-              >
-                <MessageCircle size={16} />
-                {language === 'es' ? 'Enviar mensaje' : 'Send message'}
-              </button>
-
-              <button
-                className="qam-dialog-btn"
-                onClick={() => handleOpenFriendProfile(selectedFriendForAction)}
-              >
-                <ExternalLink size={16} />
-                {language === 'es' ? 'Ver perfil de Steam' : 'View Steam profile'}
-              </button>
-
-              <button
-                className="qam-dialog-btn"
-                onClick={() => toggleFavorite(selectedFriendForAction.steamid)}
-              >
-                <Star
-                  size={16}
-                  fill={favoriteIds.includes(selectedFriendForAction.steamid) ? '#ffd700' : 'none'}
-                  color={favoriteIds.includes(selectedFriendForAction.steamid) ? '#ffd700' : 'currentColor'}
-                />
-                {favoriteIds.includes(selectedFriendForAction.steamid)
-                  ? language === 'es'
-                    ? 'Quitar de favoritos'
-                    : 'Remove from favorites'
-                  : language === 'es'
-                    ? 'Añadir a favoritos'
-                    : 'Add to favorites'}
-              </button>
-
-              <button
-                className="qam-dialog-btn"
-                onClick={() => handleCopySteamId(selectedFriendForAction.steamid)}
-              >
-                {copiedId ? <Check size={16} color="#4cd964" /> : <Copy size={16} />}
-                {copiedId
-                  ? language === 'es'
-                    ? '¡SteamID copiado!'
-                    : 'SteamID copied!'
-                  : 'Copiar SteamID'}
-              </button>
+              ))}
             </div>
           </div>
         </div>
