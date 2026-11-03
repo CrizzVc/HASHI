@@ -858,68 +858,80 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
       </aside>
 
       {/* ── Friend Action Flyout / Modal ── */}
-      {selectedFriendForAction && (
-        <div className="qam-action-dialog-overlay" onClick={() => setSelectedFriendForAction(null)}>
-          <div className="qam-action-dialog" onClick={(e) => e.stopPropagation()}>
-            <button className="qam-dialog-close" onClick={() => setSelectedFriendForAction(null)}>
-              <X size={18} />
-            </button>
+      {selectedFriendForAction && (() => {
+        const isOnline = isFriendOnline(selectedFriendForAction)
+        const isPlaying = Boolean(selectedFriendForAction.gameextrainfo)
+        const statusClass = isOnline ? (isPlaying ? 'playing' : 'online') : 'offline'
+        const statusLabel = isOnline
+          ? selectedFriendForAction.gameextrainfo || (language === 'es' ? 'Conectado' : 'Online')
+          : formatLastLogoff(selectedFriendForAction.lastlogoff, language)
 
-            <div className="qam-dialog-header">
-              <div className="qam-dialog-avatar-wrap">
+        // Drum-roll geometry
+        const ITEM_H = 48   // px — must match CSS height
+        const GAP    = 8    // px — must match CSS gap
+        const SLOT   = ITEM_H + GAP  // 56px per slot
+        // Strip offset: focused item always lands in the middle of the 3-slot viewport (slot index 1)
+        // viewport height = 3 * ITEM_H + 2 * GAP = 160px; middle slot starts at ITEM_H + GAP = 56px
+        const stripOffset = -(actionFocusIndex * SLOT) + SLOT
+
+        return (
+          <div className="qam-action-dialog-overlay" onClick={() => setSelectedFriendForAction(null)}>
+            <div className="qam-action-dialog" onClick={(e) => e.stopPropagation()}>
+
+              {/* ── Left: avatar + info ── */}
+              <div className="qam-dialog-left">
                 {selectedFriendForAction.avatarfull ? (
                   <img
                     src={selectedFriendForAction.avatarfull}
                     alt={selectedFriendForAction.personaname}
-                    className="qam-dialog-avatar"
+                    className="qam-dialog-avatar-large"
+                    draggable={false}
                   />
                 ) : (
-                  <div className="qam-dialog-avatar-placeholder">?</div>
+                  <div className="qam-dialog-avatar-large-placeholder">?</div>
                 )}
-                <span
-                  className={`qam-status-bar ${
-                    isFriendOnline(selectedFriendForAction)
-                      ? selectedFriendForAction.gameextrainfo
-                        ? 'playing'
-                        : 'online'
-                      : 'offline'
-                  }`}
-                />
+
+                <div className="qam-dialog-left-info">
+                  <div className="qam-dialog-left-name">{selectedFriendForAction.personaname}</div>
+                  <div className={`qam-dialog-left-status ${statusClass}`}>{statusLabel}</div>
+                </div>
               </div>
 
-              <div className="qam-dialog-info">
-                <h3>{selectedFriendForAction.personaname}</h3>
-                <p
-                  className={`qam-dialog-status ${
-                    isFriendOnline(selectedFriendForAction)
-                      ? selectedFriendForAction.gameextrainfo
-                        ? 'playing'
-                        : 'online'
-                      : 'offline'
-                  }`}
-                >
-                  {isFriendOnline(selectedFriendForAction)
-                    ? selectedFriendForAction.gameextrainfo || (language === 'es' ? 'Conectado' : 'Online')
-                    : formatLastLogoff(selectedFriendForAction.lastlogoff, language)}
-                </p>
-              </div>
-            </div>
+              {/* ── Right: drum-roll actions ── */}
+              <div className="qam-dialog-right">
+                {/* Fixed white focus bar — never moves */}
+                <div className="qam-dialog-focus-bar" />
 
-            <div className="qam-dialog-actions">
-              {availableActions.map((action, idx) => (
-                <button
-                  key={action.id}
-                  className={`qam-dialog-btn ${action.highlight ? 'highlight' : ''} ${actionFocusIndex === idx ? 'focused' : ''}`}
-                  onClick={action.onClick}
-                >
-                  {action.icon}
-                  {action.label}
-                </button>
-              ))}
+                {/* Clipping viewport */}
+                <div className="qam-dialog-drum-viewport">
+                  {/* Moving strip */}
+                  <div
+                    className="qam-dialog-drum-strip"
+                    style={{ transform: `translateY(${stripOffset}px)` }}
+                  >
+                    {availableActions.map((action, idx) => {
+                      const dist = idx - actionFocusIndex
+                      const isFocused = dist === 0
+                      const isNear = Math.abs(dist) === 1
+                      return (
+                        <button
+                          key={action.id}
+                          className={`qam-dialog-btn${isFocused ? ' focused' : isNear ? ' near' : ''}`}
+                          onClick={action.onClick}
+                        >
+                          {action.icon}
+                          {action.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
