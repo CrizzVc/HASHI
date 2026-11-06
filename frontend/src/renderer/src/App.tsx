@@ -3259,6 +3259,12 @@ function App(): React.JSX.Element {
       }
 
       if (modal !== null) {
+        if (modal === 'settings' && (e.key === 'Escape' || e.key === 'BrowserBack')) {
+          e.preventDefault()
+          playClose()
+          setModal(null)
+          return
+        }
         if (e.key === 'Escape') {
           e.preventDefault()
           playClose()
@@ -6039,15 +6045,26 @@ function App(): React.JSX.Element {
 
 
 
-      {/* ── Settings Modal ── */}
+      {/* ── Settings View ── */}
       {modal === 'settings' && (
-        <div className="modal-overlay settings-modal-overlay" onClick={() => setModal(null)}>
-          <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="settings-view">
+          <div className="settings-view-shell">
             {/* Left Sidebar */}
             <aside className="settings-sidebar">
               <div className="settings-sidebar-header">
                 <div className="settings-sidebar-header-bg" />
                 <div className="settings-sidebar-header-overlay" />
+                <button
+                  type="button"
+                  className="settings-back-button"
+                  onClick={() => {
+                    playClose()
+                    setModal(null)
+                  }}
+                >
+                  <ChevronLeftIcon size={16} />
+                  <span>{t.btnBack}</span>
+                </button>
                 <h2 className="settings-sidebar-title">{t.settings}</h2>
               </div>
 
