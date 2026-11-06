@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+﻿import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import {
   PlayIcon,
   PlusIcon,
@@ -6338,9 +6338,7 @@ function App(): React.JSX.Element {
                     />
                     <div className="settings-wallpaper-hero-overlay">
                       <div className="settings-wallpaper-hero-info">
-                        <span className="settings-wallpaper-badge">
-                          {backgroundImage ? t.customBackground : t.defaultBackground}
-                        </span>
+                        {/* cualquier cosita */}
                       </div>
                       <div className="settings-wallpaper-hero-actions">
                         <button
