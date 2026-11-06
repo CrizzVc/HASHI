@@ -226,9 +226,9 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
   const handleOpenSteamChat = async (): Promise<void> => {
     playEnter?.()
-    const res = await window.api.openExternal('steam://openurl/https://steamcommunity.com/chat')
+    const res = await window.api.openExternal('steam://open/friends')
     if (!res.success) {
-      await window.api.openExternal('https://steamcommunity.com/chat')
+      await window.api.openExternal('steam://friends')
     }
   }
 
@@ -246,7 +246,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
     playEnter?.()
     const result = await window.api.openExternal(`steam://friends/message/${friend.steamid}`)
     if (!result.success) {
-      await window.api.openExternal(`https://steamcommunity.com/chat`)
+      await window.api.openExternal('steam://open/friends')
     }
   }
 
