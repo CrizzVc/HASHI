@@ -142,6 +142,8 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
   const [copiedId, setCopiedId] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState<number>(-1)
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({})
+  const [focusZone, setFocusZone] = useState<'content' | 'rail'>('content')
+  const [railFocusIndex, setRailFocusIndex] = useState<number>(0)
 
   const listContainerRef = useRef<HTMLDivElement>(null)
 
@@ -193,6 +195,34 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
   // Tabs orden
   const tabs: TabType[] = ['favorites', 'friends', 'groups', 'chats']
+
+  // Rail items para navegación con teclado
+  const railItems = useMemo(() => [
+    {
+      id: 'notifications',
+      action: () => { playEnter?.() }
+    },
+    {
+      id: 'friends',
+      action: () => { playEnter?.() }
+    },
+    {
+      id: 'settings',
+      action: () => { playEnter?.(); onClose(); onOpenSettings?.() }
+    },
+    {
+      id: 'specs',
+      action: () => { playEnter?.(); onClose(); onOpenSpecs?.() }
+    },
+    {
+      id: 'music',
+      action: () => { playEnter?.() }
+    },
+    {
+      id: 'help',
+      action: () => { playEnter?.(); onClose(); onOpenHelp?.() }
+    }
+  ], [playEnter, onClose, onOpenSettings, onOpenSpecs, onOpenHelp])
 
   const handlePrevTab = (): void => {
     playMove?.()
@@ -350,6 +380,8 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
       setFocusedIndex(-1)
       setSelectedFriendForAction(null)
       setActionFocusIndex(0)
+      setFocusZone('content')
+      setRailFocusIndex(0)
       return
     }
 
@@ -360,6 +392,9 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
           playClose?.()
           setSelectedFriendForAction(null)
           setActionFocusIndex(0)
+        } else if (focusZone === 'rail') {
+          playClose?.()
+          setFocusZone('content')
         } else {
           playClose?.()
           onClose()
@@ -392,19 +427,56 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
         return
       }
 
-      // L1 / R1 o Flechas Izquierda / Derecha para cambiar pestañas
-      if (e.key === 'BrowserBack' || e.key === 'ArrowLeft') {
+      // L1 / R1 para cambiar pestañas (bumpers del mando)
+      if (e.key === 'BrowserBack') {
         e.preventDefault()
         handlePrevTab()
         return
       }
-      if (e.key === 'BrowserForward' || e.key === 'ArrowRight') {
+      if (e.key === 'BrowserForward') {
         e.preventDefault()
         handleNextTab()
         return
       }
 
-      // Navegación en la lista
+      // ── Navegación en el Rail (barra lateral izquierda) ──
+      if (focusZone === 'rail') {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault()
+          playMove?.()
+          setRailFocusIndex((prev) => (prev < railItems.length - 1 ? prev + 1 : 0))
+          return
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault()
+          playMove?.()
+          setRailFocusIndex((prev) => (prev > 0 ? prev - 1 : railItems.length - 1))
+          return
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault()
+          playMove?.()
+          setFocusZone('content')
+          return
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          railItems[railFocusIndex]?.action()
+          return
+        }
+        return
+      }
+
+      // ── Navegación en el Content (panel derecho) ──
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        playMove?.()
+        setFocusZone('rail')
+        setFocusedIndex(-1)
+        return
+      }
+
+      // Navegación en la lista de amigos
       if (currentNavList.length > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
@@ -441,7 +513,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, selectedFriendForAction, actionFocusIndex, availableActions, currentNavList, focusedIndex, onClose, playClose, playEnter, playMove])
+  }, [isOpen, selectedFriendForAction, actionFocusIndex, availableActions, currentNavList, focusedIndex, focusZone, railFocusIndex, railItems, onClose, playClose, playEnter, playMove])
 
   if (!isOpen) return null
 
@@ -456,7 +528,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
         <div className="qam-rail">
           {/* Notifications */}
           <button
-            className="qam-rail-item"
+            className={`qam-rail-item${focusZone === 'rail' && railFocusIndex === 0 ? ' focused' : ''}`}
             title={language === 'es' ? 'Notificaciones' : 'Notifications'}
             onClick={() => {
               playEnter?.()
@@ -468,7 +540,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
           {/* Friends (Active) */}
           <button
-            className="qam-rail-item active"
+            className={`qam-rail-item active${focusZone === 'rail' && railFocusIndex === 1 ? ' focused' : ''}`}
             title={language === 'es' ? 'Amigos' : 'Friends'}
             onClick={() => playEnter?.()}
           >
@@ -477,7 +549,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
           {/* Settings */}
           <button
-            className="qam-rail-item"
+            className={`qam-rail-item${focusZone === 'rail' && railFocusIndex === 2 ? ' focused' : ''}`}
             title={language === 'es' ? 'Ajustes' : 'Settings'}
             onClick={() => {
               playEnter?.()
@@ -490,7 +562,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
           {/* Performance / Specs */}
           <button
-            className="qam-rail-item"
+            className={`qam-rail-item${focusZone === 'rail' && railFocusIndex === 3 ? ' focused' : ''}`}
             title={language === 'es' ? 'Rendimiento y Sistema' : 'Performance & System'}
             onClick={() => {
               playEnter?.()
@@ -503,7 +575,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
           {/* Music */}
           <button
-            className="qam-rail-item"
+            className={`qam-rail-item${focusZone === 'rail' && railFocusIndex === 4 ? ' focused' : ''}`}
             title={nowPlayingTitle || (language === 'es' ? 'Música' : 'Music')}
             onClick={() => playEnter?.()}
           >
@@ -512,7 +584,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
           {/* Help */}
           <button
-            className="qam-rail-item"
+            className={`qam-rail-item${focusZone === 'rail' && railFocusIndex === 5 ? ' focused' : ''}`}
             title={language === 'es' ? 'Ayuda' : 'Help'}
             onClick={() => {
               playEnter?.()

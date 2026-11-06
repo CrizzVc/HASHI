@@ -88,6 +88,19 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
+.qam-rail-item.focused {
+  outline: 2px solid #f83d3d;
+  outline-offset: 2px;
+  background: rgba(248, 61, 61, 0.15);
+  color: #ffffff;
+}
+
+.qam-rail-item.active.focused {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  background: #f83d3d;
+}
+
 .qam-rail-badge {
   position: absolute;
   top: 4px;
