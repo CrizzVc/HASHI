@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import {
   PlayIcon,
   PlusIcon,
@@ -1935,9 +1935,9 @@ function App(): React.JSX.Element {
         document.removeEventListener('visibilitychange', handleVis)
       }
     } else {
-      setSteamLibrary([])
-      setSteamFriends([])
-      setSelectedSteamAppId(null)
+      setSteamLibrary((prev) => (prev.length === 0 ? prev : []))
+      setSteamFriends((prev) => (prev.length === 0 ? prev : []))
+      setSelectedSteamAppId((prev) => (prev === null ? prev : null))
     }
     return undefined
   }, [steamAccount, loadSteamLibrary, loadSteamFriends])
@@ -2087,10 +2087,10 @@ function App(): React.JSX.Element {
   // ── Fetch Steam screenshots + details for the detail game ──
   useEffect(() => {
     if (!detailGame) {
-      setDetailScreenshots([])
-      setDetailInfo(null)
-      setDetailShotIndex(0)
-      setDetailAchievements([])
+      setDetailScreenshots((prev) => (prev.length === 0 ? prev : []))
+      setDetailInfo((prev) => (prev === null ? prev : null))
+      setDetailShotIndex((prev) => (prev === 0 ? prev : 0))
+      setDetailAchievements((prev) => (prev.length === 0 ? prev : []))
       return
     }
     let cancelled = false
@@ -4094,7 +4094,8 @@ function App(): React.JSX.Element {
       doSwapLib()
       return undefined
     }
-  }, [debouncedLibraryHeroUrl, libCurrUrl])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedLibraryHeroUrl])
 
   const steamDetailIsInstalled = Boolean(
     detailGame?.isSteam && detailGame.steamAppId && steamLibrary.some((game) => String(game.appid) === detailGame.steamAppId && game.installed)
@@ -4677,20 +4678,22 @@ function App(): React.JSX.Element {
       </div>
 
       {/* ── Quick Access Menu: Steam Deck Friends Panel ── */}
-      <FriendsDrawer
-        isOpen={friendsDrawerOpen}
-        onClose={() => setFriendsDrawerOpen(false)}
-        friends={sortedSteamFriends}
-        onOpenSettings={() => setModal('settings')}
-        onOpenSpecs={() => handleOpenSpecs()}
-        onOpenHelp={() => setShowHelperModal(true)}
-        notificationsCount={notifications.length}
-        nowPlayingTitle={friendsMusicTitle}
-        playEnter={playEnter}
-        playClose={playClose}
-        playMove={playMove}
-        language={language}
-      />
+      {friendsDrawerOpen && (
+        <FriendsDrawer
+          isOpen={friendsDrawerOpen}
+          onClose={() => setFriendsDrawerOpen(false)}
+          friends={sortedSteamFriends}
+          onOpenSettings={() => setModal('settings')}
+          onOpenSpecs={() => handleOpenSpecs()}
+          onOpenHelp={() => setShowHelperModal(true)}
+          notificationsCount={notifications.length}
+          nowPlayingTitle={friendsMusicTitle}
+          playEnter={playEnter}
+          playClose={playClose}
+          playMove={playMove}
+          language={language}
+        />
+      )}
 
       {selectedFriend && (
         <div className="friend-panel-layer" role="presentation">

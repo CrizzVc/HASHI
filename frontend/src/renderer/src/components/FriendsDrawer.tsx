@@ -374,53 +374,89 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
     return actions
   }, [selectedFriendForAction, language, favoriteIds, copiedId])
 
-  // Keyboard navigation
+  // Ref con el estado más reciente para evitar re-ejecutar el listener de teclado en cada cambio
+  const stateRef = useRef({
+    selectedFriendForAction,
+    actionFocusIndex,
+    availableActions,
+    currentNavList,
+    focusedIndex,
+    focusZone,
+    railFocusIndex,
+    railItems,
+    onClose,
+    playClose,
+    playEnter,
+    playMove
+  })
+  stateRef.current = {
+    selectedFriendForAction,
+    actionFocusIndex,
+    availableActions,
+    currentNavList,
+    focusedIndex,
+    focusZone,
+    railFocusIndex,
+    railItems,
+    onClose,
+    playClose,
+    playEnter,
+    playMove
+  }
+
+  // Reset de estado interno solo cuando isOpen cambia a false
   useEffect(() => {
     if (!isOpen) {
-      setFocusedIndex(-1)
-      setSelectedFriendForAction(null)
-      setActionFocusIndex(0)
-      setFocusZone('content')
-      setRailFocusIndex(0)
-      return
+      setFocusedIndex((prev) => (prev === -1 ? prev : -1))
+      setSelectedFriendForAction((prev) => (prev === null ? prev : null))
+      setActionFocusIndex((prev) => (prev === 0 ? prev : 0))
+      setFocusZone((prev) => (prev === 'content' ? prev : 'content'))
+      setRailFocusIndex((prev) => (prev === 0 ? prev : 0))
     }
+  }, [isOpen])
+
+  // Keyboard navigation (se registra solo mientras isOpen es true)
+  useEffect(() => {
+    if (!isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent): void => {
+      const s = stateRef.current
+
       if (e.key === 'Escape') {
         e.preventDefault()
-        if (selectedFriendForAction) {
-          playClose?.()
+        if (s.selectedFriendForAction) {
+          s.playClose?.()
           setSelectedFriendForAction(null)
           setActionFocusIndex(0)
-        } else if (focusZone === 'rail') {
-          playClose?.()
+        } else if (s.focusZone === 'rail') {
+          s.playClose?.()
           setFocusZone('content')
         } else {
-          playClose?.()
-          onClose()
+          s.playClose?.()
+          s.onClose()
         }
         return
       }
 
       // Si el modal de acciones está abierto, navegar por sus opciones
-      if (selectedFriendForAction) {
-        if (availableActions.length > 0) {
+      if (s.selectedFriendForAction) {
+        if (s.availableActions.length > 0) {
           if (e.key === 'ArrowDown') {
             e.preventDefault()
-            playMove?.()
-            setActionFocusIndex((prev) => (prev < availableActions.length - 1 ? prev + 1 : 0))
+            s.playMove?.()
+            setActionFocusIndex((prev) => (prev < s.availableActions.length - 1 ? prev + 1 : 0))
             return
           }
           if (e.key === 'ArrowUp') {
             e.preventDefault()
-            playMove?.()
-            setActionFocusIndex((prev) => (prev > 0 ? prev - 1 : availableActions.length - 1))
+            s.playMove?.()
+            setActionFocusIndex((prev) => (prev > 0 ? prev - 1 : s.availableActions.length - 1))
             return
           }
           if (e.key === 'Enter') {
             e.preventDefault()
-            playEnter?.()
-            availableActions[actionFocusIndex]?.onClick()
+            s.playEnter?.()
+            s.availableActions[s.actionFocusIndex]?.onClick()
             return
           }
         }
@@ -440,28 +476,28 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
       }
 
       // ── Navegación en el Rail (barra lateral izquierda) ──
-      if (focusZone === 'rail') {
+      if (s.focusZone === 'rail') {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
-          playMove?.()
-          setRailFocusIndex((prev) => (prev < railItems.length - 1 ? prev + 1 : 0))
+          s.playMove?.()
+          setRailFocusIndex((prev) => (prev < s.railItems.length - 1 ? prev + 1 : 0))
           return
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault()
-          playMove?.()
-          setRailFocusIndex((prev) => (prev > 0 ? prev - 1 : railItems.length - 1))
+          s.playMove?.()
+          setRailFocusIndex((prev) => (prev > 0 ? prev - 1 : s.railItems.length - 1))
           return
         }
         if (e.key === 'ArrowRight') {
           e.preventDefault()
-          playMove?.()
+          s.playMove?.()
           setFocusZone('content')
           return
         }
         if (e.key === 'Enter') {
           e.preventDefault()
-          railItems[railFocusIndex]?.action()
+          s.railItems[s.railFocusIndex]?.action()
           return
         }
         return
@@ -470,20 +506,20 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
       // ── Navegación en el Content (panel derecho) ──
       if (e.key === 'ArrowLeft') {
         e.preventDefault()
-        playMove?.()
+        s.playMove?.()
         setFocusZone('rail')
         setFocusedIndex(-1)
         return
       }
 
       // Navegación en la lista de amigos
-      if (currentNavList.length > 0) {
+      if (s.currentNavList.length > 0) {
         if (e.key === 'ArrowDown') {
           e.preventDefault()
-          playMove?.()
+          s.playMove?.()
           setFocusedIndex((prev) => {
-            const next = prev < currentNavList.length - 1 ? prev + 1 : 0
-            const el = document.getElementById(`friend-item-${currentNavList[next]?.steamid}`)
+            const next = prev < s.currentNavList.length - 1 ? prev + 1 : 0
+            const el = document.getElementById(`friend-item-${s.currentNavList[next]?.steamid}`)
             el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
             return next
           })
@@ -491,20 +527,20 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault()
-          playMove?.()
+          s.playMove?.()
           setFocusedIndex((prev) => {
-            const next = prev > 0 ? prev - 1 : currentNavList.length - 1
-            const el = document.getElementById(`friend-item-${currentNavList[next]?.steamid}`)
+            const next = prev > 0 ? prev - 1 : s.currentNavList.length - 1
+            const el = document.getElementById(`friend-item-${s.currentNavList[next]?.steamid}`)
             el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
             return next
           })
           return
         }
         if (e.key === 'Enter') {
-          if (focusedIndex >= 0 && currentNavList[focusedIndex]) {
+          if (s.focusedIndex >= 0 && s.currentNavList[s.focusedIndex]) {
             e.preventDefault()
-            playEnter?.()
-            setSelectedFriendForAction(currentNavList[focusedIndex])
+            s.playEnter?.()
+            setSelectedFriendForAction(s.currentNavList[s.focusedIndex])
             setActionFocusIndex(0)
           }
         }
@@ -513,7 +549,7 @@ export const FriendsDrawer: React.FC<FriendsDrawerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, selectedFriendForAction, actionFocusIndex, availableActions, currentNavList, focusedIndex, focusZone, railFocusIndex, railItems, onClose, playClose, playEnter, playMove])
+  }, [isOpen])
 
   if (!isOpen) return null
 
