@@ -1651,6 +1651,102 @@ app.whenReady().then(() => {
     }
   })
 
+  ipcMain.handle('get-installed-apps', async () => {
+    if (!IS_WIN) return []
+    try {
+      const startMenuPaths = [
+        join(process.env.PROGRAMDATA || 'C:\\ProgramData', 'Microsoft\\Windows\\Start Menu\\Programs'),
+        join(process.env.APPDATA || '', 'Microsoft\\Windows\\Start Menu\\Programs')
+      ]
+      const results: { name: string; exePath: string; iconDataUrl: string | null }[] = []
+
+      function isUninstaller(name: string, targetPath?: string): boolean {
+        const lowerName = name.toLowerCase()
+        if (
+          lowerName.includes('desinstal') ||
+          lowerName.includes('uninstall') ||
+          /\bunins/i.test(lowerName)
+        ) {
+          return true
+        }
+        if (targetPath) {
+          const lowerTarget = targetPath.toLowerCase()
+          const baseTarget = basename(lowerTarget)
+          if (
+            baseTarget.includes('desinstal') ||
+            baseTarget.includes('uninstall') ||
+            baseTarget.startsWith('unins') ||
+            baseTarget === 'uninst.exe'
+          ) {
+            return true
+          }
+        }
+        return false
+      }
+
+      function collectLnk(dir: string) {
+        if (!fs.existsSync(dir)) return
+        const entries = fs.readdirSync(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          const full = join(dir, entry.name)
+          if (entry.isDirectory()) {
+            collectLnk(full)
+          } else if (entry.name.toLowerCase().endsWith('.lnk')) {
+            const name = entry.name.replace(/\.lnk$/i, '')
+            if (isUninstaller(name)) continue
+
+            let targetPath: string | undefined
+            try {
+              const linkInfo = shell.readShortcutLink(full)
+              if (linkInfo.target) targetPath = linkInfo.target
+            } catch {
+              /* not a valid .lnk — use as-is */
+            }
+
+            if (targetPath && isUninstaller(name, targetPath)) continue
+
+            results.push({ name, exePath: full, iconDataUrl: null })
+          }
+        }
+      }
+
+      for (const p of startMenuPaths) collectLnk(p)
+
+      // Deduplicate by name (case-insensitive)
+      const seen = new Set<string>()
+      const unique = results.filter(r => {
+        const key = r.name.toLowerCase()
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
+      unique.sort((a, b) => a.name.localeCompare(b.name))
+
+      // Load icons for first 200 (perf limit)
+      const sliced = unique.slice(0, 200)
+      const withIcons = await Promise.all(sliced.map(async (item) => {
+        try {
+          // Resolve .lnk target so we get the real app icon, not the generic shortcut icon
+          let iconSource = item.exePath
+          try {
+            const linkInfo = shell.readShortcutLink(item.exePath)
+            if (linkInfo.target) iconSource = linkInfo.target
+          } catch { /* not a valid .lnk — use as-is */ }
+          const iconImage = await app.getFileIcon(iconSource, { size: 'large' })
+          return { ...item, iconDataUrl: iconImage.toDataURL() }
+        } catch {
+          return item
+        }
+      }))
+
+      return withIcons
+    } catch (err) {
+      console.error('get-installed-apps error:', err)
+      return []
+    }
+  })
+
   ipcMain.handle('select-game-file', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],

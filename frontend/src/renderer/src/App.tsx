@@ -1040,6 +1040,14 @@ function App(): React.JSX.Element {
   const [formName, setFormName] = useState('')
   const [formExePath, setFormExePath] = useState('')
   const [formIconUrl, setFormIconUrl] = useState<string | null>(null)
+
+  // Installed apps browser state (Steam-style add modal)
+  const [installedApps, setInstalledApps] = useState<{ name: string; exePath: string; iconDataUrl: string | null }[]>([])
+  const [installedAppsLoading, setInstalledAppsLoading] = useState(false)
+  const [installedAppsSearch, setInstalledAppsSearch] = useState('')
+  const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set())
+  const [agModalFocusIndex, setAgModalFocusIndex] = useState(-1)
+  const agAppListRef = useRef<HTMLDivElement>(null)
   const [formLaunchArgs, setFormLaunchArgs] = useState('')
   const [formLaunchMethod, setFormLaunchMethod] = useState<'proton' | 'wine' | null>(null)
   const [editingGameId, setEditingGameId] = useState<string | null>(null)
@@ -2615,7 +2623,22 @@ function App(): React.JSX.Element {
   const openAddGameModal = useCallback(() => {
     playEnter()
     resetForm()
+    setInstalledAppsSearch('')
+    setSelectedApps(new Set())
     setModal('addGame')
+    // Load installed apps from Start Menu
+    setInstalledAppsLoading(true)
+    window.api.getInstalledApps?.().then((apps: { name: string; exePath: string; iconDataUrl: string | null }[]) => {
+      const isUninstall = (n: string) => {
+        const lower = n.toLowerCase()
+        return lower.includes('desinstal') || lower.includes('uninstall') || /\bunins/i.test(lower)
+      }
+      setInstalledApps((apps ?? []).filter(a => !isUninstall(a.name)))
+      setInstalledAppsLoading(false)
+    }).catch(() => {
+      setInstalledApps([])
+      setInstalledAppsLoading(false)
+    })
   }, [])
 
   const openLibraryView = useCallback(() => {
@@ -3135,6 +3158,13 @@ function App(): React.JSX.Element {
       }
 
       if (friendsDrawerOpen) {
+        return
+      }
+
+      // Cuando el modal de agregar juego está abierto, bloquear flechas
+      // para que no naveguen el fondo — el modal gestiona la navegación.
+      if (modal === 'addGame' && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault()
         return
       }
 
@@ -5391,66 +5421,237 @@ function App(): React.JSX.Element {
         </div>
       )}
 
-      {/* ── Add Game Modal ── */}
-      {modal === 'addGame' && (
-        <div className="modal-overlay" onClick={() => setModal(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2 className="modal-title">{t.modalAddTitle}</h2>
-              <button className="modal-close" onClick={() => setModal(null)}>
-                <CloseIcon size={20} />
-              </button>
-            </div>
-            <div className="form-group">
-              <label className="form-label">{t.labelGameName}</label>
-              <input
-                className="form-input"
-                type="text"
-                placeholder="Ej: Minecraft, GTA V..."
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                autoFocus
-                id="input-game-name"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">{t.labelExePath}</label>
-              <div className="form-file-row">
-                <input
-                  className="form-input"
-                  type="text"
-                  placeholder={t.browseFile}
-                  value={formExePath}
-                  onChange={(e) => setFormExePath(e.target.value)}
-                  id="input-game-path"
-                />
-                <button className="btn-browse" onClick={handleBrowse}>
-                  <FolderIcon size={16} />
+      {/* ── Add Game Modal (Steam-style) ── */}
+      {modal === 'addGame' && (() => {
+        const isUninstall = (n: string) => {
+          const lower = n.toLowerCase()
+          return lower.includes('desinstal') || lower.includes('uninstall') || /\bunins/i.test(lower)
+        }
+        const filteredApps = installedApps.filter(a =>
+          !isUninstall(a.name) && a.name.toLowerCase().includes(installedAppsSearch.toLowerCase())
+        )
+        const allChecked = filteredApps.length > 0 && filteredApps.every(a => selectedApps.has(a.exePath))
+
+        const toggleApp = (exePath: string) => {
+          setSelectedApps(prev => {
+            const next = new Set(prev)
+            if (next.has(exePath)) next.delete(exePath)
+            else next.add(exePath)
+            return next
+          })
+        }
+
+        const toggleAll = () => {
+          if (allChecked) {
+            setSelectedApps(prev => {
+              const next = new Set(prev)
+              filteredApps.forEach(a => next.delete(a.exePath))
+              return next
+            })
+          } else {
+            setSelectedApps(prev => {
+              const next = new Set(prev)
+              filteredApps.forEach(a => next.add(a.exePath))
+              return next
+            })
+          }
+        }
+
+        const handleAddSelected = async () => {
+          const toAdd = installedApps.filter(a => selectedApps.has(a.exePath))
+          for (const app of toAdd) {
+            const icon = app.iconDataUrl || await window.api.getFileIcon(app.exePath).catch(() => null)
+            const newGame: Game = {
+              id: generateId(),
+              name: app.name,
+              exePath: app.exePath,
+              iconDataUrl: icon,
+              playtimeMinutes: 0,
+              lastPlayed: null,
+              createdAt: new Date().toISOString(),
+              color: randomColor(),
+              steamGridId: null,
+              gridImageUrl: null,
+              heroImageUrl: null,
+              logoImageUrl: null
+            }
+            setGames(prev => {
+              const updated = [...prev, newGame]
+              window.api.saveGames(updated)
+              return updated
+            })
+          }
+          setModal(null)
+          setSelectedApps(new Set())
+        }
+
+        const handleModalKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+          // Si el foco está en el input de búsqueda, solo manejar flechas para bajar al listado
+          const isInInput = document.activeElement instanceof HTMLInputElement
+
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault()
+            e.stopPropagation()
+            if (isInInput && e.key === 'ArrowDown') {
+              // Desde el buscador, bajar al primer elemento
+              setAgModalFocusIndex(0)
+              agAppListRef.current?.focus()
+              return
+            }
+            const len = filteredApps.length
+            if (len === 0) return
+            setAgModalFocusIndex(prev => {
+              const next = e.key === 'ArrowDown'
+                ? Math.min(prev + 1, len - 1)
+                : Math.max(prev - 1, 0)
+              // Scroll al elemento visible
+              requestAnimationFrame(() => {
+                const list = agAppListRef.current
+                if (!list) return
+                const items = list.querySelectorAll<HTMLElement>('.ag-app-item')
+                items[next]?.scrollIntoView({ block: 'nearest' })
+              })
+              return next
+            })
+          } else if (e.key === ' ' || e.key === 'Enter') {
+            if (!isInInput) {
+              e.preventDefault()
+              e.stopPropagation()
+              const focused = filteredApps[agModalFocusIndex]
+              if (focused) toggleApp(focused.exePath)
+            }
+          } else if (e.key === 'Escape') {
+            setModal(null)
+          }
+        }
+
+        return (
+          <div className="modal-overlay" onClick={() => setModal(null)}>
+            <div
+              className="ag-modal"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={handleModalKeyDown}
+              tabIndex={-1}
+            >
+              {/* Header */}
+              <div className="ag-modal-header">
+                <h2 className="ag-modal-title">{t.modalAddTitle}</h2>
+                <button className="modal-close" onClick={() => setModal(null)}>
+                  <CloseIcon size={20} />
                 </button>
               </div>
-            </div>
-            {formIconUrl && (
-              <div className="icon-preview">
-                <img src={formIconUrl} alt="Icono del juego" />
-                <span className="icon-preview-text">Icono extraído automáticamente</span>
+
+              {/* Body: left list + right panel */}
+              <div className="ag-modal-body">
+                {/* ── Left column: search + app list ── */}
+                <div className="ag-modal-left">
+                  {/* Search */}
+                  <div className="ag-search-wrapper">
+                    <svg className="ag-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input
+                      className="ag-search-input"
+                      type="text"
+                      placeholder={t.searchPlaceholder ?? 'Buscar'}
+                      value={installedAppsSearch}
+                      onChange={e => { setInstalledAppsSearch(e.target.value); setAgModalFocusIndex(-1) }}
+                      autoFocus
+                    />
+                  </div>
+
+                  {/* Select all row */}
+                  <div className="ag-select-all-row">
+                    <span className="ag-select-all-label">Seleccionar archivos</span>
+                    <label className="ag-checkbox-label">
+                      Seleccionar todo
+                      <input type="checkbox" checked={allChecked} onChange={toggleAll} />
+                      <span className="ag-checkbox-custom" />
+                    </label>
+                  </div>
+
+                  {/* App list */}
+                  <div className="ag-app-list" ref={agAppListRef} tabIndex={-1} style={{ outline: 'none' }}>
+                    {installedAppsLoading ? (
+                      <div className="ag-app-list-loading">Cargando aplicaciones…</div>
+                    ) : filteredApps.length === 0 ? (
+                      <div className="ag-app-list-loading">Sin resultados</div>
+                    ) : filteredApps.map((app, idx) => (
+                      <label
+                        key={app.exePath}
+                        className={`ag-app-item${selectedApps.has(app.exePath) ? ' ag-app-item--checked' : ''}${agModalFocusIndex === idx ? ' ag-app-item--focused' : ''}`}
+                      >
+                        {app.iconDataUrl
+                          ? <img className="ag-app-icon" src={app.iconDataUrl} alt="" />
+                          : <span className="ag-app-icon-placeholder" />
+                        }
+                        <span className="ag-app-name">{app.name}</span>
+                        <input
+                          type="checkbox"
+                          checked={selectedApps.has(app.exePath)}
+                          onChange={() => toggleApp(app.exePath)}
+                          className="ag-app-checkbox-input"
+                        />
+                        <span className="ag-checkbox-custom" />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Right column: add to + actions ── */}
+                <div className="ag-modal-right">
+                  <div className="ag-add-to-section">
+                    <span className="ag-add-to-label">Agregar a</span>
+                    <div className="ag-dropdown">
+                      <span>Mis juegos</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+                  </div>
+
+                  <button
+                    className="ag-btn-add-files"
+                    onClick={handleAddSelected}
+                    disabled={selectedApps.size === 0}
+                  >
+                    Agregar archivos{selectedApps.size > 0 ? ` (${selectedApps.size})` : ''}
+                  </button>
+
+                  <button className="ag-btn-browse" onClick={async () => {
+                    const filePath = await window.api.selectGameFile()
+                    if (filePath) {
+                      const icon = await window.api.getFileIcon(filePath).catch(() => null)
+                      const filename = filePath.split(/[/\\]/).pop() || ''
+                      const name = filename.replace(/\.[^.]+$/, '')
+                      const newGame: Game = {
+                        id: generateId(),
+                        name,
+                        exePath: filePath,
+                        iconDataUrl: icon,
+                        playtimeMinutes: 0,
+                        lastPlayed: null,
+                        createdAt: new Date().toISOString(),
+                        color: randomColor(),
+                        steamGridId: null,
+                        gridImageUrl: null,
+                        heroImageUrl: null,
+                        logoImageUrl: null
+                      }
+                      setGames(prev => {
+                        const updated = [...prev, newGame]
+                        window.api.saveGames(updated)
+                        return updated
+                      })
+                      setModal(null)
+                    }
+                  }}>
+                    Examinar más archivos
+                  </button>
+                </div>
               </div>
-            )}
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={() => setModal(null)}>
-                {t.btnCancel}
-              </button>
-              <button
-                className="btn-primary"
-                onClick={handleAddGame}
-                disabled={!formName.trim()}
-                id="btn-save-game"
-              >
-                {t.btnSave}
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Edit Game Modal ── */}
       {modal === 'editGame' && (() => {

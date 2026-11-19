@@ -27,6 +27,7 @@ declare global {
       }>
       selectGameFile: () => Promise<string | null>
       getFileIcon: (filePath: string) => Promise<string | null>
+      getInstalledApps: () => Promise<{ name: string; exePath: string; iconDataUrl: string | null }[]>
       getGames: () => Promise<any[]>
       saveGames: (games: any[]) => Promise<{ success: boolean; error?: string }>
       onGameExited: (callback: (data: { gameId: string; durationMinutes: number }) => void) => () => void
